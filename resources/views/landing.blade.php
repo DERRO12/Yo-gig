@@ -5,19 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YO GIG MAID - Professional Gig Cleaning Services</title>
     
-    <!-- Link External CSS -->
+    <!-- External Stylesheet -->
     <link rel="stylesheet" href="{{ asset('css/style.css') }}">
 </head>
 <body>
 
-    <nav class="navbar">
-        <a href="/" class="brand-logo">YO GIG <span>MAID</span></a>
-        <ul class="nav-links">
-            <li><a href="#services">Services</a></li>
-            <li><a href="#about">About</a></li>
-            <li><a href="#" class="btn btn-primary">Sign In</a></li>
-        </ul>
-    </nav>
+    <!-- Include Navbar Component -->
+    @include('components.navbar')
 
     <main>
         <section class="hero">
@@ -54,9 +48,8 @@
         </section>
     </main>
 
-    <footer>
-        <p>&copy; {{ date('Y') }} YO GIG MAID. Sustainable Gig Cleaning Ecosystem[cite: 1].</p>
-    </footer>
+    <!-- Include Footer Component -->
+    @include('components.footer')
 
 </body>
 </html>
