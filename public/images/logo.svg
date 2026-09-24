@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 110" width="100%" height="100%">
+  <defs>
+    <!-- Brand Gradients -->
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F4C5C" />
+      <stop offset="100%" stop-color="#072A33" />
+    </linearGradient>
+
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3C882" />
+      <stop offset="50%" stop-color="#E3A857" />
+      <stop offset="100%" stop-color="#C58C3C" />
+    </linearGradient>
+
+    <linearGradient id="sageGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4E878C" />
+      <stop offset="100%" stop-color="#6FA8AC" />
+    </linearGradient>
+
+    <!-- Elevation Shadow -->
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#0F4C5C" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <!-- Left Emblem Icon -->
+  <g filter="url(#softShadow)" transform="translate(5, 5)">
+    <!-- Base Shield Frame -->
+    <path d="M 50 15 Q 80 15 80 15 C 80 50 80 70 50 95 C 20 70 20 50 20 15 Q 20 15 50 15 Z" fill="url(#tealGrad)" />
+    
+    <!-- Accent Inner Arch -->
+    <path d="M 28 22 C 28 52 50 83 50 83 C 50 83 72 52 72 22" fill="none" stroke="url(#sageGrad)" stroke-width="3" opacity="0.85" />
+
+    <!-- Spark / Broom Monogram Icon -->
+    <path d="M 50 32 L 50 62" stroke="url(#goldGrad)" stroke-width="4.5" stroke-linecap="round" />
+    <path d="M 38 60 L 62 60" stroke="url(#goldGrad)" stroke-width="3.5" stroke-linecap="round" />
+    
+    <!-- Sparkle Accent -->
+    <path d="M 62 28 L 64 33 L 69 35 L 64 37 L 62 42 L 60 37 L 55 35 L 60 33 Z" fill="url(#goldGrad)" />
+    <circle cx="36" cy="30" r="2" fill="#FFFFFF" opacity="0.9" />
+  </g>
+
+  <!-- Stacked Typography Group -->
+  <g transform="translate(108, 0)">
+    <!-- Line 1: YO'gig -->
+    <text x="0" y="55" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="38" fill="url(#tealGrad)" letter-spacing="-0.8px">
+      YO'gig
+    </text>
+
+    <!-- Line 2: Maiding services -->
+    <text x="2" y="82" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="600" font-size="16" fill="url(#goldGrad)" letter-spacing="0.5px">
+      Maiding services
+    </text>
+  </g>
+</svg>
