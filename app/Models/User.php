@@ -21,6 +21,8 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'phone_number',
+        'role',
         'password',
     ];
 
@@ -45,5 +47,56 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Role Helpers
+    |--------------------------------------------------------------------------
+    */
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isClient(): bool
+    {
+        return $this->role === 'client';
+    }
+
+    public function isMaid(): bool
+    {
+        return $this->role === 'maid';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Maid profile (only exists if role === 'maid').
+     */
+    public function maidProfile()
+    {
+        return $this->hasOne(MaidProfile::class);
+    }
+
+    /**
+     * Jobs posted by this user (as a client).
+     */
+    public function jobsAsClient()
+    {
+        return $this->hasMany(Job::class, 'client_id');
+    }
+
+    /**
+     * Jobs assigned to this user (as a maid).
+     */
+    public function jobsAsMaid()
+    {
+        return $this->hasMany(Job::class, 'maid_id');
     }
 }
