@@ -1,82 +1,78 @@
+@php
+    $socials = array_filter([
+        'Facebook' => $site->get('social_facebook'),
+        'X / Twitter' => $site->get('social_twitter'),
+        'Instagram' => $site->get('social_instagram'),
+        'LinkedIn' => $site->get('social_linkedin'),
+    ]);
+    $socialIcons = [
+        'Facebook' => 'M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07',
+        'X / Twitter' => 'M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z',
+        'Instagram' => 'M12 2.16c3.2 0 3.58.01 4.85.07 3.25.15 4.77 1.69 4.92 4.92.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.15 3.23-1.66 4.77-4.92 4.92-1.27.06-1.64.07-4.85.07s-3.58-.01-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.64-.07-4.85s.01-3.58.07-4.85C2.38 3.92 3.9 2.38 7.15 2.23 8.42 2.17 8.8 2.16 12 2.16zM12 0C8.74 0 8.33.01 7.05.07 2.7.27.27 2.69.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.2 4.36 2.62 6.78 6.98 6.98 1.28.06 1.69.07 4.95.07s3.67-.01 4.95-.07c4.35-.2 6.78-2.62 6.98-6.98.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.2-4.35-2.62-6.78-6.98-6.98C15.67.01 15.26 0 12 0zm0 5.84a6.16 6.16 0 100 12.32 6.16 6.16 0 000-12.32zM12 16a4 4 0 110-8 4 4 0 010 8zm6.41-11.85a1.44 1.44 0 100 2.88 1.44 1.44 0 000-2.88z',
+        'LinkedIn' => 'M19 0H5a5 5 0 00-5 5v14a5 5 0 005 5h14a5 5 0 005-5V5a5 5 0 00-5-5zM8 19H5V8h3v11zM6.5 6.73a1.76 1.76 0 110-3.53 1.76 1.76 0 010 3.53zM20 19h-3v-5.6c0-3.37-4-3.12-4 0V19h-3V8h3v1.77c1.4-2.59 7-2.78 7 2.47V19z',
+    ];
+@endphp
+
 <footer class="footer">
-    <!-- Main Footer Content -->
-    <div class="footer-top">
-        <div class="container footer-grid">
-            
-            <!-- Column 1: Brand & Overview -->
-            <div class="footer-brand">
-                <a href="{{ route('landing') }}" class="footer-logo">
-                    <img src="{{ asset('images/logo.svg') }}" alt="YO'gig Maid Logo" class="footer-logo-img" width="160" height="48">
-                </a>
-                <p class="brand-tagline">
-                    Empowering gig cleaning professionals while offering homes and offices reliable, vetted services protected by 100% risk-free escrow payments.
-                </p>
-                <div class="social-links">
-                    <a href="#" aria-label="Facebook" class="social-icon">
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                    </a>
-                    <a href="#" aria-label="X / Twitter" class="social-icon">
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                    </a>
-                    <a href="#" aria-label="LinkedIn" class="social-icon">
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-                    </a>
-                    <a href="#" aria-label="Instagram" class="social-icon">
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                    </a>
+    <div class="container footer__top">
+        <div>
+            <a href="{{ route('landing') }}" class="footer__logo">
+                <img src="{{ $site->image('logo') }}" alt="{{ $site->get('site_name') }}" width="140" height="36">
+            </a>
+            <p class="footer__about">{{ $site->get('footer_about') }}</p>
+
+            @if ($socials)
+                <div class="social">
+                    @foreach ($socials as $label => $url)
+                        <a href="{{ $url }}" target="_blank" rel="noopener" aria-label="{{ $label }}">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="{{ $socialIcons[$label] }}"/></svg>
+                        </a>
+                    @endforeach
                 </div>
-            </div>
+            @endif
+        </div>
 
-            <!-- Column 2: Quick Links -->
-            <div class="footer-links">
-                <h4 class="footer-heading">Quick Links</h4>
-                <ul>
-                    <li><a href="{{ route('landing') }}">Home</a></li>
-                    <li><a href="{{ route('about') }}">About Us</a></li>
-                    <li><a href="{{ route('services') }}">Our Services</a></li>
-                    <li><a href="{{ url('/#escrow-how-it-works') }}">Escrow Payment System</a></li>
-                </ul>
-            </div>
+        <div>
+            <h4>Explore</h4>
+            <ul class="footer__links">
+                <li><a href="{{ route('landing') }}">Home</a></li>
+                <li><a href="{{ route('services') }}">Services & Pricing</a></li>
+                <li><a href="{{ route('about') }}">About Us</a></li>
+                <li><a href="{{ route('contact') }}">Contact</a></li>
+            </ul>
+        </div>
 
-            <!-- Column 3: For Users -->
-            <div class="footer-links">
-                <h4 class="footer-heading">Join The Platform</h4>
-                <ul>
-                    <li><a href="{{ url('/#book') }}">Book a Maid</a></li>
-                    <li><a href="{{ url('/#join') }}">Become a Gig Maid</a></li>
-                    <li><a href="{{ url('/#calculator') }}">Price Estimator</a></li>
-                    <li><a href="#">Support & Help Center</a></li>
-                </ul>
-            </div>
+        <div>
+            <h4>Get Started</h4>
+            <ul class="footer__links">
+                <li><a href="{{ auth()->check() && auth()->user()->isClient() ? route('client.bookings.create') : route('register') }}">Book a Maid</a></li>
+                <li><a href="{{ route('register', ['role' => 'maid']) }}">Become a Gig Maid</a></li>
+                <li><a href="{{ route('landing') }}#how-it-works">How Escrow Works</a></li>
+                <li><a href="{{ route('login') }}">Log in</a></li>
+            </ul>
+        </div>
 
-            <!-- Column 4: Trust & Contact -->
-            <div class="footer-contact">
-                <h4 class="footer-heading">Secure Payments</h4>
-                <div class="trust-badge">
-                    <span class="lock-icon">🔒</span>
-                    <div>
-                        <strong>100% Escrow Protection</strong>
-                        <p>Funds released only when work is approved.</p>
-                    </div>
-                </div>
-                <div class="contact-details">
-                    <p>📧 support@yogigmaid.com</p>
-                    <p>📞 +256 700 000 000</p>
-                </div>
-            </div>
-
+        <div>
+            <h4>Contact Us</h4>
+            <ul class="footer__contact">
+                @if ($site->get('contact_phone'))
+                    <li>📞 <a href="tel:{{ preg_replace('/[^0-9+]/', '', $site->get('contact_phone')) }}">{{ $site->get('contact_phone') }}</a></li>
+                @endif
+                @if ($site->get('contact_email'))
+                    <li>✉️ <a href="mailto:{{ $site->get('contact_email') }}">{{ $site->get('contact_email') }}</a></li>
+                @endif
+                @if ($site->get('contact_address'))
+                    <li>📍 <span>{{ $site->get('contact_address') }}</span></li>
+                @endif
+                @if ($site->get('business_hours'))
+                    <li>🕒 <span>{{ $site->get('business_hours') }}</span></li>
+                @endif
+            </ul>
         </div>
     </div>
 
-    <!-- Bottom Copyright & Legal Links -->
-    <div class="footer-bottom">
-        <div class="container footer-bottom-container">
-            <p>&copy; {{ date('Y') }} <strong>YO'gig Maid</strong>. Sustainable Gig Cleaning Ecosystem. All rights reserved.</p>
-            <ul class="legal-links">
-                <li><a href="#">Privacy Policy</a></li>
-                <li><a href="#">Terms of Service</a></li>
-                <li><a href="#">Escrow Policy</a></li>
-            </ul>
-        </div>
+    <div class="container footer__bottom">
+        <p>&copy; {{ date('Y') }} <strong>{{ $site->get('site_name') }}</strong>. {{ $site->get('copyright_text') }}</p>
+        <p>🔒 Payments held in escrow until you approve the work.</p>
     </div>
 </footer>
