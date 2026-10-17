@@ -29,11 +29,11 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        if (User::query()->where('email', 'client@yogigmaid.com')->exists()) {
-            return;
+        if (! User::query()->where('email', 'client@yogigmaid.com')->exists()) {
+            $this->seedDemoAccounts();
         }
 
-        $this->seedDemoAccounts();
+        $this->call(DemoMarketplaceSeeder::class);
     }
 
     /**
