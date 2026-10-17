@@ -74,7 +74,7 @@ class SiteSettings
 
     public function number(string $key): float
     {
-        return (float) $this->get($key, 0);
+        return (float) $this->get($key);
     }
 
     /**

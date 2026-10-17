@@ -117,7 +117,9 @@ test('auto-confirm mode puts payments straight into escrow', function () {
         'transaction_reference' => 'BANK-1',
     ])->assertSessionHasNoErrors();
 
-    expect($job->refresh()->payment_status)->toBe(Job::PAYMENT_PAID);
+    expect($job->refresh()->payment_status)->toBe(Job::PAYMENT_PAID)
+        ->and((float) $job->platform_fee)->toBe(7500.0) // default 15% commission
+        ->and((float) $job->maid_earnings)->toBe(42500.0);
 });
 
 test('a rejected payment asks the client to pay again', function () {

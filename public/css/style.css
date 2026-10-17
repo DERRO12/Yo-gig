@@ -272,9 +272,7 @@ h1, h2, h3, h4 {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: saturate(160%) blur(12px);
-    -webkit-backdrop-filter: saturate(160%) blur(12px);
+    background: #fff;
     border-bottom: 1px solid var(--border);
 }
 
@@ -1087,7 +1085,8 @@ textarea.input { resize: vertical; min-height: 110px; }
 /* ---------- Dashboards (client & maid) ---------- */
 
 .dash {
-    padding: 1.75rem 0 3.5rem;
+    padding-top: 1.75rem;
+    padding-bottom: 3.5rem;
 }
 
 .dash-header {
@@ -1487,7 +1486,13 @@ nav[role="navigation"] svg { width: 18px; height: 18px; }
     .detail-grid--even { grid-template-columns: 1fr 1fr; }
     .footer__top { grid-template-columns: 1.5fr 1fr 1fr 1.3fr; }
 
-    /* Desktop navigation */
+    /* Desktop navigation. The blur is desktop-only: a backdrop-filter would trap the fixed mobile menu inside the header. */
+    .site-header {
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: saturate(160%) blur(12px);
+        -webkit-backdrop-filter: saturate(160%) blur(12px);
+    }
+
     .nav__toggle { display: none; }
 
     .nav__menu {
