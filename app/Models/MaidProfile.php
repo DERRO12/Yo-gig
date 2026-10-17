@@ -20,6 +20,9 @@ class MaidProfile extends Model
         'available',
         'completed_jobs',
         'average_rating',
+        'payout_method',
+        'payout_account_name',
+        'payout_account_number',
     ];
 
     protected $casts = [
@@ -31,5 +34,15 @@ class MaidProfile extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->verification_status === 'verified';
+    }
+
+    public function hasPayoutDetails(): bool
+    {
+        return filled($this->payout_method) && filled($this->payout_account_number);
     }
 }

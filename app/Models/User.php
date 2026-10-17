@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'phone_number',
         'role',
+        'is_active',
         'password',
     ];
 
@@ -46,6 +47,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -98,5 +100,35 @@ class User extends Authenticatable
     public function jobsAsMaid()
     {
         return $this->hasMany(Job::class, 'maid_id');
+    }
+
+    /**
+     * Payments made by this user (as a client).
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'client_id');
+    }
+
+    /**
+     * Payouts sent to this user (as a maid).
+     */
+    public function payouts()
+    {
+        return $this->hasMany(Payout::class, 'maid_id');
+    }
+
+    public function isVerifiedMaid(): bool
+    {
+        return $this->isMaid() && $this->maidProfile?->verification_status === 'verified';
+    }
+
+    public function dashboardRoute(): string
+    {
+        return match ($this->role) {
+            'admin' => 'admin.dashboard',
+            'maid' => 'maid.dashboard',
+            default => 'client.dashboard',
+        };
     }
 }
