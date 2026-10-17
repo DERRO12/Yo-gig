@@ -2,6 +2,7 @@
 
 use App\Models\Job;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 test('guests are sent to login from dashboards', function (string $routeName) {
     $this->get(route($routeName))->assertRedirect(route('login'));
@@ -65,4 +66,16 @@ test('maid national ID photos are only available to admins', function () {
     $client = User::factory()->client()->create();
 
     $this->actingAs($client)->get(route('admin.users.national-id', $maid))->assertRedirect('/');
+});
+
+test('accounts with $2a$ bcrypt hashes from external tools can still log in', function () {
+    $user = User::factory()->admin()->create(['email' => 'legacy@example.com']);
+    $legacyHash = '$2a$'.substr(password_hash('secret-123', PASSWORD_BCRYPT), 4);
+    DB::table('users')->where('id', $user->id)->update(['password' => $legacyHash]);
+
+    $this->post('/login', ['login' => 'legacy@example.com', 'password' => 'secret-123'])
+        ->assertRedirect(route('admin.dashboard'));
+
+    $this->assertAuthenticatedAs($user);
+    expect($user->refresh()->getAuthPassword())->toStartWith('$2y$');
 });
