@@ -4,108 +4,125 @@ namespace App\Http\Controllers\Maid;
 
 use App\Http\Controllers\Controller;
 use App\Models\Job;
+use App\Support\BookingWorkflow;
+use App\Support\SiteSettings;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
 
 class GigController extends Controller
 {
+    public function __construct(public BookingWorkflow $workflow, public SiteSettings $settings) {}
+
     /**
-     * List all open gigs.
-     * Sort: same service area first, then newest.
+     * List funded open gigs, with gigs in the maid's service area first.
      */
-    public function index()
+    public function index(Request $request): View
     {
-        $maid = Auth::user();
-        $maidArea = optional($maid->maidProfile)->service_area;
+        $maidArea = $request->user()->maidProfile?->service_area;
 
-        // Query 1: Gigs in maid's service area (if set)
-        $areaGigs = collect();
-        if ($maidArea) {
-            $areaGigs = Job::where('status', 'open')
-                ->where('location', 'like', '%' . $maidArea . '%')
-                ->with('client')
-                ->latest()
-                ->get();
-        }
-
-        // Query 2: All other open gigs
-        $areaGigIds = $areaGigs->pluck('id')->toArray();
-        $otherGigs = Job::where('status', 'open')
-            ->whereNotIn('id', $areaGigIds)
-            ->with('client')
+        $gigs = Job::query()
+            ->availableForMaids()
+            ->with('service')
+            ->when($request->filled('q'), function ($query) use ($request): void {
+                $term = '%'.$request->string('q').'%';
+                $query->where(fn ($q) => $q->where('title', 'like', $term)->orWhere('location', 'like', $term));
+            })
             ->latest()
             ->get();
 
-        // My assigned gigs
-        $myJobs = Job::where('maid_id', $maid->id)
-            ->with('client')
-            ->latest()
-            ->get();
+        [$areaGigs, $otherGigs] = $maidArea
+            ? $gigs->partition(fn (Job $job): bool => str_contains(strtolower((string) $job->location), strtolower($maidArea)))
+            : [collect(), $gigs];
 
-        return view('maid.gigs.index', compact('areaGigs', 'otherGigs', 'myJobs', 'maidArea'));
+        return view('maid.gigs.index', [
+            'areaGigs' => $areaGigs,
+            'otherGigs' => $otherGigs,
+            'maidArea' => $maidArea,
+            'canClaim' => $this->canClaim($request),
+        ]);
     }
 
-    /**
-     * Show a single gig's details (including images).
-     */
-    public function show(Job $job)
+    public function show(Request $request, Job $job): View
     {
-        // Only show open gigs or gigs already claimed by this maid
-        if ($job->status !== 'open' && $job->maid_id !== Auth::id()) {
-            abort(404);
+        $isMine = $job->maid_id === $request->user()->id;
+
+        abort_unless($isMine || ($job->isOpen() && $job->isFunded()), 404);
+
+        $job->load(['client', 'service', 'payout']);
+
+        return view('maid.gigs.show', [
+            'job' => $job,
+            'isMine' => $isMine,
+            'canClaim' => $this->canClaim($request),
+        ]);
+    }
+
+    public function claim(Request $request, Job $job): RedirectResponse
+    {
+        if (! $this->canClaim($request)) {
+            return back()->with('error', 'Your ID must be verified by our team before you can claim gigs.');
         }
 
-        $job->load('client', 'assignedMaid');
-
-        return view('maid.gigs.show', compact('job'));
-    }
-
-    /**
-     * Claim an open gig as the current maid.
-     */
-    public function claim(Job $job)
-    {
-        // Sanity checks
-        if ($job->status !== 'open') {
+        if (! $job->isOpen() || ! $job->isFunded()) {
             return back()->with('error', 'Sorry, this gig is no longer available.');
         }
 
-        if ($job->client_id === Auth::id()) {
-            return back()->with('error', 'You cannot claim your own gig.');
-        }
-
-        $job->update([
-            'maid_id'    => Auth::id(),
-            'status'     => 'matched',
-            'claimed_at' => now(),
-        ]);
+        $this->workflow->assignMaid($job, $request->user());
 
         return redirect()
-            ->route('maid.dashboard')
-            ->with('success', 'Gig claimed! Client contact details are now visible below.');
+            ->route('maid.gigs.show', $job)
+            ->with('success', 'Gig claimed! The client contact details are now visible.');
     }
 
-    /**
-     * Release a gig — return it to the open pool.
-     */
-    public function release(Job $job)
+    public function release(Request $request, Job $job): RedirectResponse
     {
-        if ($job->maid_id !== Auth::id()) {
-            abort(403, 'You can only release gigs assigned to you.');
-        }
+        $this->ensureAssigned($request, $job);
 
-        if (in_array($job->status, ['in_progress', 'completed'])) {
+        if (! $job->isMatched()) {
             return back()->with('error', 'You cannot release a gig that is already in progress or completed.');
         }
 
-        $job->update([
-            'maid_id'    => null,
-            'status'     => 'open',
-            'claimed_at' => null,
-        ]);
+        $this->workflow->releaseMaid($job);
 
         return redirect()
             ->route('maid.dashboard')
             ->with('success', 'Gig released. It is now available for other maids.');
+    }
+
+    public function start(Request $request, Job $job): RedirectResponse
+    {
+        $this->ensureAssigned($request, $job);
+
+        if (! $job->isMatched()) {
+            return back()->with('error', 'This gig cannot be started.');
+        }
+
+        $this->workflow->start($job);
+
+        return back()->with('success', 'Job started. Mark it complete when you finish.');
+    }
+
+    public function complete(Request $request, Job $job): RedirectResponse
+    {
+        $this->ensureAssigned($request, $job);
+
+        if (! $job->isInProgress()) {
+            return back()->with('error', 'Only jobs in progress can be marked complete.');
+        }
+
+        $this->workflow->complete($job);
+
+        return back()->with('success', 'Great work! The client has been asked to approve so your payout can be released.');
+    }
+
+    protected function ensureAssigned(Request $request, Job $job): void
+    {
+        abort_unless($job->maid_id === $request->user()->id, 403, 'You can only manage gigs assigned to you.');
+    }
+
+    protected function canClaim(Request $request): bool
+    {
+        return ! $this->settings->bool('require_maid_verification') || $request->user()->isVerifiedMaid();
     }
 }
