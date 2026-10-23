@@ -130,7 +130,7 @@ class SiteContentSeeder extends Seeder
             ['about', 'hero', [
                 'badge' => 'Our mission & ecosystem',
                 'title' => 'Transforming Gig Cleaning Into Sustainable Livelihoods',
-                'body' => "YO'gig Maid tackles unemployment by building a professional, safe and cashless gig-cleaning network that connects trained maids with households, offices and commercial spaces.",
+                'body' => 'Yo-gig House Manager tackles unemployment by building a professional, safe and cashless gig-cleaning network that connects trained maids with households, offices and commercial spaces.',
                 'image_path' => 'images/training.jpg',
             ]],
             ['about', 'mission', ['badge' => 'Mission', 'title' => 'Our Goal', 'body' => 'To reduce poverty by creating flexible, dignified and sustainable self-employment through high-standard cleaning services.']],
@@ -144,7 +144,7 @@ class SiteContentSeeder extends Seeder
             ['about', 'stats', ['title' => '4 Sectors', 'body' => 'Residential, office, commercial and institutional spaces.']],
             ['about', 'cta', [
                 'title' => 'Be Part of the Sustainable Gig Ecosystem',
-                'body' => "Whether you need reliable cleaning or want to build a steady income, YO'gig Maid is built for you.",
+                'body' => 'Whether you need reliable cleaning or want to build a steady income, Yo-gig House Manager is built for you.',
                 'button_text' => 'Book a Maid Today',
                 'button_url' => '/client/dashboard',
                 'secondary_button_text' => 'Apply as a Maid',

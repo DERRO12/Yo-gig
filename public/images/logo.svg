@@ -44,12 +44,12 @@
   <g transform="translate(108, 0)">
     <!-- Line 1: YO'gig -->
     <text x="0" y="55" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="38" fill="url(#tealGrad)" letter-spacing="-0.8px">
-      YO'gig
+      Yo-gig
     </text>
 
-    <!-- Line 2: Maiding services -->
+    <!-- Line 2: House Manager -->
     <text x="2" y="82" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="600" font-size="16" fill="url(#goldGrad)" letter-spacing="0.5px">
-      Maiding services
+      House Manager
     </text>
   </g>
 </svg>

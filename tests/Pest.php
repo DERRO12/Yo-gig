@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\ApiToken;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +49,15 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Send the following requests with a mobile app token for the user. Guards are reset because
+ * the test application is reused between requests and would otherwise keep the previous user.
+ */
+function apiAs(User $user): TestCase
+{
+    app('auth')->forgetGuards();
+
+    return test()->withToken(ApiToken::issue($user));
 }

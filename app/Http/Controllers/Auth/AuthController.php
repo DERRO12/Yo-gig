@@ -23,10 +23,9 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        // Determine if input is an email address or a phone number
-        $fieldType = filter_var($credentials['login'], FILTER_VALIDATE_EMAIL) ? 'email' : 'phone_number';
+        $fieldType = User::loginField($credentials['login']);
 
-        $this->upgradeLegacyPasswordHash($fieldType, $credentials['login'], $credentials['password']);
+        User::upgradeLegacyPasswordHash($credentials['login'], $credentials['password']);
 
         if (Auth::attempt([$fieldType => $credentials['login'], 'password' => $credentials['password']], $request->boolean('remember'))) {
             $user = Auth::user();
@@ -47,22 +46,6 @@ class AuthController extends Controller
         return back()->withErrors([
             'login' => 'The provided credentials do not match our records.',
         ])->onlyInput('login');
-    }
-
-    /**
-     * Accounts created outside the app (e.g. phpMyAdmin with an online bcrypt tool) may carry
-     * "$2a$"/"$2b$" hashes, which Laravel's hasher rejects. Re-hash them on a correct password.
-     */
-    protected function upgradeLegacyPasswordHash(string $fieldType, string $login, string $password): void
-    {
-        $user = User::query()->where($fieldType, $login)->first();
-        $hash = $user?->getAuthPassword();
-
-        if (! $hash || ! preg_match('/^\$2[ab]\$/', $hash) || ! password_verify($password, $hash)) {
-            return;
-        }
-
-        $user->forceFill(['password' => Hash::make($password)])->save();
     }
 
     /**

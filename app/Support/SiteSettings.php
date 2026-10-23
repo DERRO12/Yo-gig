@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Setting;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class SiteSettings
@@ -89,6 +90,54 @@ class SiteSettings
         }
 
         $this->flush();
+    }
+
+    /**
+     * Validation rules for a settings group's fields.
+     *
+     * @param  array<string, array{type: string}>  $fields
+     * @return array<string, list<string>>
+     */
+    public function validationRules(array $fields): array
+    {
+        $rules = [];
+
+        foreach ($fields as $key => $field) {
+            $rules[$key] = match ($field['type']) {
+                'email' => ['nullable', 'email', 'max:255'],
+                'url' => ['nullable', 'url', 'max:255'],
+                'number' => ['nullable', 'numeric', 'min:0'],
+                'boolean' => ['nullable', 'boolean'],
+                'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
+                'textarea' => ['nullable', 'string', 'max:5000'],
+                default => ['nullable', 'string', 'max:255'],
+            };
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Values to save for a settings group, storing uploaded images and keeping the current one otherwise.
+     *
+     * @param  array<string, array{type: string}>  $fields
+     * @return array<string, string|null>
+     */
+    public function valuesFromRequest(Request $request, array $fields): array
+    {
+        $values = [];
+
+        foreach ($fields as $key => $field) {
+            $values[$key] = match ($field['type']) {
+                'boolean' => $request->boolean($key) ? '1' : '0',
+                'image' => $request->hasFile($key)
+                    ? Media::replace($this->all()[$key] ?? null, $request->file($key), 'branding')
+                    : ($this->all()[$key] ?? null),
+                default => $request->input($key),
+            };
+        }
+
+        return $values;
     }
 
     public function flush(): void

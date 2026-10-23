@@ -1,4 +1,4 @@
-/* YO'gig Maid - small progressive enhancements, no build step required. */
+/* Yo-gig House Manager - small progressive enhancements, no build step required. */
 (function () {
     'use strict';
 

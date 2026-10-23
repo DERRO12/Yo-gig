@@ -19,7 +19,7 @@ return [
         'general' => [
             'label' => 'General & Branding',
             'fields' => [
-                'site_name' => ['label' => 'Site name', 'type' => 'text', 'default' => "YO'gig Maid"],
+                'site_name' => ['label' => 'Site name', 'type' => 'text', 'default' => 'Yo-gig House Manager'],
                 'site_tagline' => ['label' => 'Tagline', 'type' => 'text', 'default' => 'On-demand cleaning with escrow-protected payments'],
                 'meta_description' => ['label' => 'SEO description', 'type' => 'textarea', 'default' => 'Book vetted, background-checked cleaning professionals for home and office spaces. Cashless escrow payments guarantee satisfaction and zero payment risk.'],
                 'logo' => ['label' => 'Logo', 'type' => 'image', 'default' => 'images/logo.svg'],
@@ -31,7 +31,7 @@ return [
         'contact' => [
             'label' => 'Contact Info',
             'fields' => [
-                'contact_email' => ['label' => 'Support email', 'type' => 'email', 'default' => 'support@yogigmaid.com'],
+                'contact_email' => ['label' => 'Support email', 'type' => 'email', 'default' => 'support@yogighousemanager.com'],
                 'contact_phone' => ['label' => 'Phone number', 'type' => 'text', 'default' => '+256 700 000 000'],
                 'contact_whatsapp' => ['label' => 'WhatsApp number', 'type' => 'text', 'default' => '+256 700 000 000'],
                 'contact_address' => ['label' => 'Office address', 'type' => 'textarea', 'default' => 'Plot 12, Ntinda Road, Kampala, Uganda'],
@@ -57,7 +57,7 @@ return [
                 'min_booking_amount' => ['label' => 'Minimum booking amount', 'type' => 'number', 'default' => '20000'],
                 'mtn_momo_number' => ['label' => 'MTN Mobile Money number', 'type' => 'text', 'default' => '0770 000 000'],
                 'airtel_money_number' => ['label' => 'Airtel Money number', 'type' => 'text', 'default' => '0750 000 000'],
-                'payment_account_name' => ['label' => 'Account name clients pay to', 'type' => 'text', 'default' => "YO'gig Maid Ltd"],
+                'payment_account_name' => ['label' => 'Account name clients pay to', 'type' => 'text', 'default' => 'Yo-gig House Manager Ltd'],
                 'bank_details' => ['label' => 'Bank transfer details', 'type' => 'textarea', 'default' => "Bank: Stanbic Bank Uganda\nAccount: 9030 0000 0000\nBranch: Kampala Road"],
                 'payment_instructions' => ['label' => 'Payment instructions shown to clients', 'type' => 'textarea', 'default' => 'Send the exact booking amount to any of the accounts below, then submit the transaction ID. Your money is held in escrow and only released to the maid after you approve the finished work.'],
                 'auto_confirm_payments' => ['label' => 'Auto-confirm client payments (demo mode)', 'type' => 'boolean', 'default' => '0'],

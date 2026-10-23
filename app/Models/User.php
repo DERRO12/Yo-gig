@@ -5,8 +5,10 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Hash;
 
 class User extends Authenticatable
 {
@@ -118,9 +120,41 @@ class User extends Authenticatable
         return $this->hasMany(Payout::class, 'maid_id');
     }
 
+    /**
+     * Bearer tokens issued to the mobile app.
+     */
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(ApiToken::class);
+    }
+
     public function isVerifiedMaid(): bool
     {
         return $this->isMaid() && $this->maidProfile?->verification_status === 'verified';
+    }
+
+    /**
+     * The login field a credential refers to: users sign in with an email address or a phone number.
+     */
+    public static function loginField(string $login): string
+    {
+        return filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone_number';
+    }
+
+    /**
+     * Accounts created outside the app (e.g. phpMyAdmin with an online bcrypt tool) may carry
+     * "$2a$"/"$2b$" hashes, which Laravel's hasher rejects. Re-hash them on a correct password.
+     */
+    public static function upgradeLegacyPasswordHash(string $login, string $password): void
+    {
+        $user = static::query()->where(static::loginField($login), $login)->first();
+        $hash = $user?->getAuthPassword();
+
+        if (! $hash || ! preg_match('/^\$2[ab]\$/', $hash) || ! password_verify($password, $hash)) {
+            return;
+        }
+
+        $user->forceFill(['password' => Hash::make($password)])->save();
     }
 
     public function dashboardRoute(): string

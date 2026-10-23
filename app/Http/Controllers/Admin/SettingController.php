@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Support\Media;
 use App\Support\SiteSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,45 +32,10 @@ class SettingController extends Controller
 
         abort_unless(is_array($fields), 404);
 
-        $request->validate($this->rules($fields));
+        $request->validate($this->settings->validationRules($fields));
 
-        $values = [];
-
-        foreach ($fields as $key => $field) {
-            $values[$key] = match ($field['type']) {
-                'boolean' => $request->boolean($key) ? '1' : '0',
-                'image' => $request->hasFile($key)
-                    ? Media::replace($this->settings->all()[$key] ?? null, $request->file($key), 'branding')
-                    : ($this->settings->all()[$key] ?? null),
-                default => $request->input($key),
-            };
-        }
-
-        $this->settings->set($values);
+        $this->settings->set($this->settings->valuesFromRequest($request, $fields));
 
         return redirect()->route('admin.settings.edit', $group)->with('success', 'Settings saved.');
-    }
-
-    /**
-     * @param  array<string, array{type: string}>  $fields
-     * @return array<string, list<string>>
-     */
-    protected function rules(array $fields): array
-    {
-        $rules = [];
-
-        foreach ($fields as $key => $field) {
-            $rules[$key] = match ($field['type']) {
-                'email' => ['nullable', 'email', 'max:255'],
-                'url' => ['nullable', 'url', 'max:255'],
-                'number' => ['nullable', 'numeric', 'min:0'],
-                'boolean' => ['nullable', 'boolean'],
-                'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
-                'textarea' => ['nullable', 'string', 'max:5000'],
-                default => ['nullable', 'string', 'max:255'],
-            };
-        }
-
-        return $rules;
     }
 }
