@@ -188,6 +188,66 @@
             sync();
         });
 
+        /* ---------- Scroll reveal + 3D card tilt (public pages only) ---------- */
+        var isPublicPage = document.querySelector('.hero, .page-hero');
+        var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (isPublicPage && !reduceMotion && 'IntersectionObserver' in window) {
+            var revealTargets = document.querySelectorAll(
+                'main .section-head, main .card, main .band, main .cta, main .gallery3d'
+            );
+            var revealObserver = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    var el = entry.target;
+                    revealObserver.unobserve(el);
+                    el.classList.add('is-revealed');
+                    // Hand control back to the normal styles (hover effects etc.) once shown.
+                    setTimeout(function () {
+                        el.removeAttribute('data-reveal');
+                        el.classList.remove('is-revealed');
+                    }, 900);
+                });
+            }, { rootMargin: '0px 0px -8% 0px' });
+
+            document.documentElement.classList.add('reveal-on');
+            revealTargets.forEach(function (el, i) {
+                // Leave anything already on screen alone so nothing flickers.
+                if (el.getBoundingClientRect().top < window.innerHeight) return;
+                el.setAttribute('data-reveal', '');
+                el.style.transitionDelay = (i % 3) * 90 + 'ms';
+                revealObserver.observe(el);
+                el.addEventListener('transitionend', function clear() {
+                    el.style.transitionDelay = '';
+                    el.removeEventListener('transitionend', clear);
+                });
+            });
+        }
+
+        var finePointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        if (isPublicPage && !reduceMotion && finePointer) {
+            document.documentElement.classList.add('tilt-on');
+            document.querySelectorAll('.service-card, .feature-card, .testimonial, .gig-card, .hero__card, .band-step').forEach(function (card) {
+                card.setAttribute('data-tilt', '');
+                var frame = 0;
+                card.addEventListener('pointermove', function (event) {
+                    if (frame) return;
+                    frame = requestAnimationFrame(function () {
+                        frame = 0;
+                        var rect = card.getBoundingClientRect();
+                        var x = (event.clientX - rect.left) / rect.width - 0.5;
+                        var y = (event.clientY - rect.top) / rect.height - 0.5;
+                        card.style.transform = 'perspective(900px) rotateX(' + (-y * 7).toFixed(2) + 'deg) rotateY(' + (x * 9).toFixed(2) + 'deg) translateY(-4px)';
+                    });
+                });
+                card.addEventListener('pointerleave', function () {
+                    if (frame) cancelAnimationFrame(frame);
+                    frame = 0;
+                    card.style.transform = '';
+                });
+            });
+        }
+
         /* ---------- Confirm before destructive actions ---------- */
         document.querySelectorAll('form[data-confirm]').forEach(function (form) {
             form.addEventListener('submit', function (event) {

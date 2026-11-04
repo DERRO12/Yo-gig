@@ -28,6 +28,7 @@
     @include('components.footer')
 
     <script src="{{ asset('js/site.js') }}?v={{ filemtime(public_path('js/site.js')) }}" defer></script>
+    <script type="module" src="{{ asset('js/three-scenes.js') }}?v={{ filemtime(public_path('js/three-scenes.js')) }}"></script>
     @stack('scripts')
 </body>
 </html>

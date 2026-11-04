@@ -1,5 +1,5 @@
 @if ($hero)
-    <section class="page-hero" @if ($hero->imageUrl()) style="background-image: url('{{ $hero->imageUrl() }}');" @endif>
+    <section class="page-hero" data-three-hero @if ($hero->imageUrl()) style="background-image: url('{{ $hero->imageUrl() }}');" @endif>
         <div class="container">
             @if ($hero->badge)
                 <span class="hero__badge">{{ $hero->badge }}</span>

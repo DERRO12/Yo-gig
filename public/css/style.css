@@ -1550,6 +1550,183 @@ nav[role="navigation"] svg { width: 18px; height: 18px; }
     .hero__card { display: block; }
 }
 
+/* ---------- three.js 3D layers (public/js/three-scenes.js) ---------- */
+
+.three-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.three-canvas--hero {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+}
+
+.hero.is-3d .three-canvas--hero,
+.page-hero.is-3d .three-canvas--hero { opacity: 1; }
+
+/* Home hero: the canvas now draws the photo and its tint, text sits on top. */
+.hero.is-3d .hero__slide { z-index: 1; }
+.hero.is-3d .hero__bg { display: none; }
+
+/* Inner page heroes */
+.page-hero { overflow: hidden; }
+.page-hero .three-canvas--hero { z-index: -1; }
+.page-hero.is-3d { background-image: none !important; }
+.page-hero.is-3d::before { display: none; }
+
+.hero.is-3d .hero__card,
+.page-hero.is-3d .hero__badge {
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
+/* Escrow flow strip inside the "How we protect both sides" band */
+.escrow3d {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.8s ease, opacity 0.8s ease, margin 0.8s ease;
+}
+
+.escrow3d.is-3d {
+    max-height: 340px;
+    opacity: 1;
+    margin: -0.5rem 0 1.75rem;
+}
+
+.escrow3d__stage { height: clamp(170px, 26vw, 240px); }
+
+.escrow3d__labels {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    text-align: center;
+    font-size: clamp(0.72rem, 2.4vw, 0.9rem);
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* 3D gallery */
+.gallery3d-section {
+    color: #fff;
+    overflow: hidden;
+    background:
+        radial-gradient(ellipse 80% 60% at 50% 0%, rgba(227, 168, 87, 0.18), transparent 70%),
+        linear-gradient(180deg, #0F4C5C 0%, #082831 100%);
+}
+
+.gallery3d-section .section-title { color: #fff; }
+.gallery3d-section .section-lead { color: rgba(255, 255, 255, 0.82); }
+.gallery3d-section .eyebrow { color: var(--accent); }
+
+.gallery3d {
+    position: relative;
+    border-radius: var(--radius-lg);
+    outline: none;
+}
+
+.gallery3d:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
+
+.gallery3d__stage,
+.gallery3d__caption,
+.gallery3d__hint { display: none; }
+
+.gallery3d.is-3d .gallery3d__stage {
+    display: block;
+    height: clamp(300px, 55vw, 480px);
+}
+
+.gallery3d.is-3d .three-canvas--gallery {
+    pointer-events: auto;
+    cursor: grab;
+}
+
+.gallery3d.is-dragging .three-canvas--gallery { cursor: grabbing; }
+
+.gallery3d.is-3d .gallery3d__caption {
+    display: block;
+    min-height: 1.6em;
+    margin: 0.25rem 0 0;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--accent);
+}
+
+.gallery3d.is-3d .gallery3d__hint {
+    display: block;
+    margin: 0.25rem 0 0;
+    text-align: center;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.gallery3d__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.gallery3d__grid li {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius);
+    aspect-ratio: 4 / 3;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.gallery3d__grid img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gallery3d__grid span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1.5rem 0.9rem 0.7rem;
+    font-weight: 700;
+    background: linear-gradient(180deg, transparent, rgba(8, 40, 49, 0.9));
+}
+
+/* With the 3D ring showing, keep the plain grid for screen readers only. */
+.gallery3d.is-3d .gallery3d__grid {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+/* Scroll reveal and 3D card tilt (public/js/site.js) */
+.reveal-on [data-reveal] {
+    opacity: 0;
+    transform: translateY(28px) scale(0.98);
+}
+
+.reveal-on [data-reveal].is-revealed {
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.tilt-on [data-tilt] {
+    transform-style: preserve-3d;
+    transition: transform 0.18s ease-out, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation: none !important;

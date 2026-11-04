@@ -11,7 +11,7 @@
 
     {{-- Hero slider --}}
     @if ($slides->isNotEmpty())
-        <section class="hero" data-slider aria-roledescription="carousel" aria-label="Highlights">
+        <section class="hero" data-slider data-three-hero aria-roledescription="carousel" aria-label="Highlights">
             @foreach ($slides as $slide)
                 <article class="hero__slide {{ $loop->first ? 'is-active' : '' }}" data-slide aria-roledescription="slide" aria-label="{{ $loop->iteration }} of {{ $slides->count() }}">
                     <div class="hero__bg" style="background-image: url('{{ $slide->imageUrl('images/cashless.jpg') }}');"></div>
@@ -72,6 +72,14 @@
                         <h2 class="section-title">How We Protect Both Sides</h2>
                         <p class="section-lead">Clients pay the platform. The platform pays the maid after you approve. Simple and dispute-free.</p>
                     </div>
+                    <div class="escrow3d" data-three-escrow aria-hidden="true">
+                        <div class="escrow3d__stage" data-escrow-stage></div>
+                        <div class="escrow3d__labels">
+                            <span>Client pays</span>
+                            <span>{{ $site->get('site_name') }} holds it</span>
+                            <span>Maid gets paid</span>
+                        </div>
+                    </div>
                     <div class="grid grid-3">
                         @foreach ($steps as $step)
                             <div class="band-step">
@@ -102,6 +110,43 @@
                 </div>
                 <div class="text-center mt-3">
                     <a href="{{ route('services') }}" class="btn btn-outline">See all services →</a>
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- 3D gallery of the site's own images (plain image grid without WebGL) --}}
+    @php
+        $gallery = collect();
+        foreach ($slides as $slide) {
+            if ($url = $slide->imageUrl()) {
+                $gallery->push(['src' => $url, 'title' => $slide->title]);
+            }
+        }
+        foreach ($featuredServices as $service) {
+            $gallery->push(['src' => $service->imageUrl(), 'title' => $service->name]);
+        }
+    @endphp
+    @if ($gallery->count() >= 3)
+        <section class="section gallery3d-section">
+            <div class="container">
+                <div class="section-head">
+                    <span class="eyebrow">Gallery</span>
+                    <h2 class="section-title">A Closer Look at {{ $site->get('site_name') }}</h2>
+                    <p class="section-lead">The services, people and training behind every booking.</p>
+                </div>
+                <div class="gallery3d" data-three-gallery tabindex="0" aria-label="Image gallery, use the left and right arrow keys to rotate">
+                    <div class="gallery3d__stage" data-gallery-stage></div>
+                    <p class="gallery3d__caption" data-gallery-caption aria-live="polite"></p>
+                    <p class="gallery3d__hint" aria-hidden="true">Drag or swipe to spin</p>
+                    <ul class="gallery3d__grid">
+                        @foreach ($gallery as $item)
+                            <li data-gallery-item data-src="{{ $item['src'] }}" data-title="{{ $item['title'] }}">
+                                <img src="{{ $item['src'] }}" alt="{{ $item['title'] }}" loading="lazy">
+                                <span>{{ $item['title'] }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
                 </div>
             </div>
         </section>
