@@ -237,7 +237,7 @@
                         var rect = card.getBoundingClientRect();
                         var x = (event.clientX - rect.left) / rect.width - 0.5;
                         var y = (event.clientY - rect.top) / rect.height - 0.5;
-                        card.style.transform = 'perspective(900px) rotateX(' + (-y * 7).toFixed(2) + 'deg) rotateY(' + (x * 9).toFixed(2) + 'deg) translateY(-4px)';
+                        card.style.transform = 'perspective(900px) rotateX(' + (-y * 4).toFixed(2) + 'deg) rotateY(' + (x * 5).toFixed(2) + 'deg) translateY(-4px)';
                     });
                 });
                 card.addEventListener('pointerleave', function () {

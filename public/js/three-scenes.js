@@ -7,9 +7,10 @@
  * WebGL, and the visitor has not asked for reduced motion or data saving.
  *
  * Scenes:
- *   [data-three-hero]     hero photos rendered in 3D with parallax, soap bubbles and sparkles
- *   [data-three-gallery]  draggable 3D ring of the site's own images
- *   [data-three-escrow]   client -> escrow shield -> maid, with gold coins moving between them
+ *   [data-three-hero]     hero photo in 3D: parallax depth, cinematic slide transitions,
+ *                         a cursor-following light and a flowing gold particle wave
+ *   [data-three-escrow]   studio-lit client -> escrow shield -> maid flow, synced with the steps
+ *   [data-three-gallery]  curved 3D carousel of the site's own images with arrows and snapping
  */
 
 const heroes = Array.from(document.querySelectorAll('[data-three-hero]'));
@@ -21,6 +22,8 @@ const saveData = Boolean(navigator.connection && navigator.connection.saveData);
 const isSmall = window.matchMedia('(max-width: 720px)').matches;
 const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 const lowPower = (navigator.hardwareConcurrency || 4) <= 2 || (navigator.deviceMemory || 4) <= 1;
+
+const GOLD = [0.89, 0.66, 0.34];
 
 function hasWebGL() {
     try {
@@ -38,8 +41,8 @@ if (shouldRun) {
     import(new URL('./vendor/three.module.min.js', import.meta.url).href)
         .then((THREE) => {
             heroes.forEach((el) => whenNear(el, () => safely(() => heroScene(THREE, el))));
-            galleries.forEach((el) => whenNear(el, () => safely(() => galleryScene(THREE, el))));
             escrows.forEach((el) => whenNear(el, () => safely(() => escrowScene(THREE, el))));
+            galleries.forEach((el) => whenNear(el, () => safely(() => galleryScene(THREE, el))));
         })
         .catch(() => { /* Keep the regular page if three.js cannot load. */ });
 }
@@ -64,25 +67,27 @@ function whenNear(el, start) {
             observer.disconnect();
             start();
         }
-    }, { rootMargin: '200px 0px' });
+    }, { rootMargin: '250px 0px' });
     observer.observe(el);
 }
 
-function pixelRatio() {
-    return Math.min(window.devicePixelRatio || 1, isSmall ? 1.25 : 1.75);
+function maxPixelRatio() {
+    return Math.min(window.devicePixelRatio || 1, isSmall ? 1.5 : 2);
 }
 
 /**
- * Create a renderer + canvas in `host`, keep it sized, and run `frame` only
- * while the canvas is on screen and the tab is visible.
+ * Create a renderer + canvas, keep it sized, run `frame` only while it is on
+ * screen and the tab is visible, and lower the resolution automatically if
+ * the device cannot keep up (adaptive quality).
  */
 function createStage(THREE, host, { linear = true, className = '' } = {}) {
     const renderer = new THREE.WebGLRenderer({
         antialias: !isSmall,
         alpha: true,
-        powerPreference: 'low-power',
+        powerPreference: 'high-performance',
     });
-    renderer.setPixelRatio(pixelRatio());
+    let ratio = maxPixelRatio();
+    renderer.setPixelRatio(ratio);
     renderer.setClearColor(0x000000, 0);
     // Linear output passes colours straight through, so photos and CSS colours
     // look exactly like they do in the stylesheet.
@@ -99,28 +104,50 @@ function createStage(THREE, host, { linear = true, className = '' } = {}) {
         width: 1,
         height: 1,
         visible: true,
+        dead: false,
         frame: null,
         resize: null,
         clock: new THREE.Clock(),
         raf: 0,
+        quality: 1,
     };
 
-    const measure = () => {
+    const measure = (force) => {
         const rect = canvas.getBoundingClientRect();
         const w = Math.max(1, Math.round(rect.width));
         const h = Math.max(1, Math.round(rect.height));
-        if (w === stage.width && h === stage.height) return;
+        if (!force && w === stage.width && h === stage.height) return;
         stage.width = w;
         stage.height = h;
         renderer.setSize(w, h, false);
         if (stage.resize) stage.resize(w, h);
     };
 
+    // Adaptive quality: watch the frame time and step the resolution down if needed.
+    let samples = 0;
+    let total = 0;
+    const adapt = (dt) => {
+        if (stage.quality <= 0.5) return;
+        samples++;
+        total += dt;
+        if (samples < 60) return;
+        const avg = total / samples;
+        samples = 0;
+        total = 0;
+        if (avg > 1 / 40) {
+            stage.quality = Math.max(0.5, stage.quality - 0.25);
+            ratio = Math.max(0.75, maxPixelRatio() * stage.quality);
+            renderer.setPixelRatio(ratio);
+            measure(true);
+        }
+    };
+
     const loop = () => {
         stage.raf = 0;
-        if (!stage.visible || document.hidden) return;
+        if (!stage.visible || document.hidden || stage.dead) return;
         const dt = Math.min(stage.clock.getDelta(), 0.05);
         if (stage.frame) stage.frame(dt, stage.clock.elapsedTime);
+        adapt(dt);
         stage.raf = requestAnimationFrame(loop);
     };
 
@@ -133,10 +160,17 @@ function createStage(THREE, host, { linear = true, className = '' } = {}) {
         }
     };
 
+    stage.destroy = () => {
+        stage.dead = true;
+        stage.frame = null;
+        canvas.remove();
+        renderer.dispose();
+    };
+
     if ('ResizeObserver' in window) {
-        new ResizeObserver(measure).observe(canvas);
+        new ResizeObserver(() => measure()).observe(canvas);
     } else {
-        window.addEventListener('resize', measure);
+        window.addEventListener('resize', () => measure());
     }
 
     if ('IntersectionObserver' in window) {
@@ -165,7 +199,7 @@ function loadTexture(THREE, url) {
         img.crossOrigin = 'anonymous';
         img.decoding = 'async';
         img.onload = () => {
-            const max = isSmall ? 1024 : 1600;
+            const max = isSmall ? 1280 : 2048;
             const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
             let source = img;
             if (scale < 1) {
@@ -203,8 +237,53 @@ function cssColor(r, g, b, a) {
     return [r / 255, g / 255, b / 255, a];
 }
 
+function easeInOut(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function easeOut(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+function damp(current, target, lambda, dt) {
+    return current + (target - current) * (1 - Math.exp(-lambda * dt));
+}
+
+/** Pointer position over an element in -1..1, smoothed. Desktop only. */
+function trackPointer(el) {
+    const p = { x: 0, y: 0, tx: 0, ty: 0, inside: false };
+    if (!finePointer) return p;
+    el.addEventListener('pointermove', (event) => {
+        const rect = el.getBoundingClientRect();
+        p.tx = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
+        p.ty = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+        p.inside = true;
+    });
+    el.addEventListener('pointerleave', () => {
+        p.tx = 0;
+        p.ty = 0;
+        p.inside = false;
+    });
+    p.update = (dt) => {
+        p.x = damp(p.x, p.tx, 4, dt);
+        p.y = damp(p.y, p.ty, 4, dt);
+    };
+    return p;
+}
+
+const GLSL_NOISE = /* glsl */`
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                   mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+    }
+`;
+
 /* ------------------------------------------------------------------ */
-/* Hero: the slide photo in 3D, with bubbles and sparkles                */
+/* Hero                                                                 */
 /* ------------------------------------------------------------------ */
 
 function heroScene(THREE, host) {
@@ -218,7 +297,7 @@ function heroScene(THREE, host) {
     host.insertBefore(stage.canvas, host.firstChild);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 60);
     camera.position.set(0, 0, 6);
 
     // Same tint as the CSS overlays: diagonal on the home hero, vertical on inner pages.
@@ -226,7 +305,7 @@ function heroScene(THREE, host) {
         ? [cssColor(8, 40, 49, 0.92), cssColor(15, 76, 92, 0.78), cssColor(15, 76, 92, 0.45)]
         : [cssColor(8, 40, 49, 0.88), cssColor(12, 58, 71, 0.85), cssColor(15, 76, 92, 0.82)];
 
-    const photoUniforms = {
+    const u = {
         uTexA: { value: null },
         uTexB: { value: null },
         uAspectA: { value: 1.5 },
@@ -241,21 +320,21 @@ function heroScene(THREE, host) {
         uC1: { value: new THREE.Vector4(...stops[1]) },
         uC2: { value: new THREE.Vector4(...stops[2]) },
         uBase: { value: new THREE.Vector3(15 / 255, 76 / 255, 92 / 255) },
+        uLight: { value: new THREE.Vector2(0.72, 0.38) },
+        uLightOn: { value: 0 },
+        uGold: { value: new THREE.Vector3(...GOLD) },
     };
 
     const photo = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1, 24, 16),
+        new THREE.PlaneGeometry(1, 1, 1, 1),
         new THREE.ShaderMaterial({
-            uniforms: photoUniforms,
+            uniforms: u,
+            depthWrite: false,
             vertexShader: /* glsl */`
-                uniform float uTime;
                 varying vec2 vUv;
                 void main() {
                     vUv = uv;
-                    vec3 p = position;
-                    // A slow, gentle cloth-like wave so the photo feels alive.
-                    p.z += sin(p.x * 3.0 + uTime * 0.6) * 0.035 + cos(p.y * 4.0 + uTime * 0.45) * 0.03;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                 }
             `,
             fragmentShader: /* glsl */`
@@ -266,143 +345,157 @@ function heroScene(THREE, host) {
                 uniform float uMix;
                 uniform float uHasTex;
                 uniform float uPlaneAspect;
+                uniform float uTime;
                 uniform vec2 uResolution;
                 uniform float uAngle;
                 uniform vec4 uC0;
                 uniform vec4 uC1;
                 uniform vec4 uC2;
                 uniform vec3 uBase;
+                uniform vec2 uLight;
+                uniform float uLightOn;
+                uniform vec3 uGold;
                 varying vec2 vUv;
+                ${GLSL_NOISE}
 
-                vec2 cover(vec2 uv, float imageAspect) {
+                vec2 cover(vec2 uv, float imageAspect, float zoom) {
                     vec2 scale = uPlaneAspect > imageAspect
                         ? vec2(1.0, imageAspect / uPlaneAspect)
                         : vec2(uPlaneAspect / imageAspect, 1.0);
-                    return (uv - 0.5) * scale + 0.5;
+                    return (uv - 0.5) * scale / zoom + 0.5;
                 }
 
                 void main() {
                     vec3 photo = uBase;
+                    float seam = 0.0;
                     if (uHasTex > 0.5) {
-                        vec3 a = texture2D(uTexA, cover(vUv, uAspectA)).rgb;
-                        vec3 b = texture2D(uTexB, cover(vUv, uAspectB)).rgb;
-                        photo = mix(a, b, smoothstep(0.0, 1.0, uMix));
+                        // Cinematic transition: an organic diagonal wipe with a soft gold edge,
+                        // the old photo pushing in while the new one settles.
+                        float edge = vUv.x * 0.75 + (1.0 - vUv.y) * 0.25;
+                        float n = noise(vUv * 5.0 + uTime * 0.2);
+                        float p = uMix * 1.7 - 0.35;
+                        float t = smoothstep(edge - 0.12, edge + 0.12, p + (n - 0.5) * 0.22);
+                        vec3 a = texture2D(uTexA, cover(vUv, uAspectA, 1.0 + uMix * 0.08)).rgb;
+                        vec3 b = texture2D(uTexB, cover(vUv, uAspectB, 1.08 - uMix * 0.08)).rgb;
+                        photo = mix(a, b, t);
+                        seam = t * (1.0 - t) * 4.0 * step(0.001, uMix) * step(uMix, 0.999);
                     }
 
                     // CSS linear-gradient(angle, c0, c1 50%, c2) in screen space.
                     vec2 px = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y) - 0.5 * uResolution;
                     vec2 dir = vec2(sin(uAngle), -cos(uAngle));
                     float halfLen = 0.5 * (abs(uResolution.x * dir.x) + abs(uResolution.y * dir.y));
-                    float t = clamp(dot(px, dir) / (2.0 * halfLen) + 0.5, 0.0, 1.0);
-                    vec4 tint = t < 0.5 ? mix(uC0, uC1, t * 2.0) : mix(uC1, uC2, (t - 0.5) * 2.0);
+                    float g = clamp(dot(px, dir) / (2.0 * halfLen) + 0.5, 0.0, 1.0);
+                    vec4 tint = g < 0.5 ? mix(uC0, uC1, g * 2.0) : mix(uC1, uC2, (g - 0.5) * 2.0);
 
-                    gl_FragColor = vec4(mix(photo, tint.rgb, tint.a), 1.0);
+                    vec3 color = mix(photo, tint.rgb, tint.a);
+
+                    // Soft studio light that follows the cursor.
+                    vec2 screenUv = gl_FragCoord.xy / uResolution;
+                    vec2 d = (screenUv - uLight) * vec2(uResolution.x / uResolution.y, 1.0);
+                    float light = exp(-dot(d, d) * 3.2);
+                    color += (photo * 0.22 + uGold * 0.05) * light * (0.55 + 0.45 * uLightOn);
+
+                    // Vignette, gold transition seam and fine film grain.
+                    float vig = smoothstep(1.25, 0.35, length((screenUv - 0.5) * vec2(1.2, 1.0)));
+                    color *= mix(0.82, 1.0, vig);
+                    color += uGold * seam * 0.35;
+                    color += (hash(gl_FragCoord.xy + fract(uTime) * 100.0) - 0.5) * 0.028;
+
+                    gl_FragColor = vec4(color, 1.0);
                 }
             `,
-            depthWrite: false,
         })
     );
     photo.position.z = -1.2;
     scene.add(photo);
 
-    /* Soap bubbles: instanced billboards with a thin-film rainbow rim. */
-    const bubbleCount = Math.round((isSmall ? 12 : 26) * (isSlider ? 1 : 0.6));
-    const bubbleGeo = new THREE.InstancedBufferGeometry();
-    const quad = new THREE.PlaneGeometry(1, 1);
-    bubbleGeo.index = quad.index;
-    bubbleGeo.setAttribute('position', quad.getAttribute('position'));
-    bubbleGeo.setAttribute('uv', quad.getAttribute('uv'));
-    const seed = new Float32Array(bubbleCount * 4);
-    const base = new Float32Array(bubbleCount * 3);
-    for (let i = 0; i < bubbleCount; i++) {
-        base[i * 3] = (Math.random() - 0.5) * 2;           // x as a fraction of the view width
-        base[i * 3 + 1] = Math.random();                   // starting height (0..1)
-        base[i * 3 + 2] = -0.6 + Math.random() * 2.4;      // depth, in front of the photo
-        seed[i * 4] = 0.12 + Math.random() * 0.32;         // size
-        seed[i * 4 + 1] = 0.05 + Math.random() * 0.07;     // rise speed
-        seed[i * 4 + 2] = Math.random() * Math.PI * 2;     // phase
-        seed[i * 4 + 3] = Math.random();                   // hue offset
-    }
-    bubbleGeo.setAttribute('aBase', new THREE.InstancedBufferAttribute(base, 3));
-    bubbleGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 4));
-    bubbleGeo.instanceCount = bubbleCount;
-
-    const sharedUniforms = {
+    /* Flowing gold particle wave: a field of fine dots rolling like fabric. */
+    const shared = {
         uTime: { value: 0 },
         uView: { value: new THREE.Vector2(4, 2.5) },
-        uPixelRatio: { value: pixelRatio() },
+        uPixelRatio: { value: stage.renderer.getPixelRatio() },
+        uPointer: { value: new THREE.Vector2(0, 0) },
+        uGold: { value: new THREE.Vector3(...GOLD) },
     };
 
-    const bubbles = new THREE.Mesh(bubbleGeo, new THREE.ShaderMaterial({
-        uniforms: sharedUniforms,
+    const cols = isSmall ? 70 : 150;
+    const rows = isSmall ? 26 : 44;
+    const wavePos = new Float32Array(cols * rows * 3);
+    let k = 0;
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            wavePos[k++] = c / (cols - 1) * 2 - 1;
+            wavePos[k++] = 0;
+            wavePos[k++] = r / (rows - 1);
+        }
+    }
+    const waveGeo = new THREE.BufferGeometry();
+    waveGeo.setAttribute('position', new THREE.BufferAttribute(wavePos, 3));
+    const wave = new THREE.Points(waveGeo, new THREE.ShaderMaterial({
+        uniforms: shared,
         transparent: true,
         depthWrite: false,
+        blending: THREE.AdditiveBlending,
         vertexShader: /* glsl */`
-            attribute vec3 aBase;
-            attribute vec4 aSeed;
             uniform float uTime;
             uniform vec2 uView;
-            varying vec2 vUv;
-            varying float vHue;
-            varying float vFade;
+            uniform float uPixelRatio;
+            uniform vec2 uPointer;
+            varying float vAlpha;
+            varying float vLift;
             void main() {
-                vUv = uv;
-                vHue = aSeed.w;
-                float rise = fract(aBase.y + uTime * aSeed.y);
-                vec3 center = vec3(
-                    aBase.x * uView.x * 0.55 + sin(uTime * 0.7 + aSeed.z) * 0.18,
-                    (rise - 0.5) * (uView.y * 1.25),
-                    aBase.z
-                );
-                vFade = smoothstep(0.0, 0.12, rise) * (1.0 - smoothstep(0.85, 1.0, rise));
-                float wobble = 1.0 + sin(uTime * 2.0 + aSeed.z) * 0.04;
-                vec4 mv = modelViewMatrix * vec4(center, 1.0);
-                mv.xy += position.xy * aSeed.x * vec2(wobble, 2.0 - wobble);
+                float x = position.x * uView.x * 0.8;
+                float z = mix(2.4, -2.2, position.z);
+                float t = uTime;
+                float y = sin(x * 0.75 + t * 0.55) * 0.22
+                        + sin(z * 1.1 + t * 0.4 + x * 0.25) * 0.18
+                        + sin((x - z) * 1.9 + t * 0.85) * 0.05;
+                // A gentle swell under the cursor.
+                float dp = distance(vec2(x, z), vec2(uPointer.x * uView.x * 0.5, 0.4));
+                y += exp(-dp * dp * 0.6) * 0.18 * length(uPointer);
+                vLift = y;
+                vec3 p = vec3(x, y - uView.y * 0.4, z);
+                vec4 mv = modelViewMatrix * vec4(p, 1.0);
+                gl_PointSize = 2.8 * uPixelRatio * (6.0 / -mv.z);
                 gl_Position = projectionMatrix * mv;
+                float edgeX = 1.0 - smoothstep(0.55, 1.0, abs(position.x));
+                float depth = smoothstep(0.0, 0.25, position.z) * (1.0 - smoothstep(0.35, 0.75, position.z));
+                vAlpha = edgeX * depth;
             }
         `,
         fragmentShader: /* glsl */`
-            uniform float uTime;
-            varying vec2 vUv;
-            varying float vHue;
-            varying float vFade;
-            vec3 rainbow(float h) {
-                return 0.5 + 0.5 * cos(6.2831 * (h + vec3(0.0, 0.33, 0.67)));
-            }
+            uniform vec3 uGold;
+            varying float vAlpha;
+            varying float vLift;
             void main() {
-                vec2 p = vUv * 2.0 - 1.0;
-                float r = length(p);
-                if (r > 1.0) discard;
-                float rim = smoothstep(0.62, 0.98, r) * (1.0 - smoothstep(0.96, 1.0, r));
-                float angle = atan(p.y, p.x);
-                vec3 film = rainbow(vHue + r * 0.6 + angle * 0.08 + uTime * 0.05);
-                float highlight = smoothstep(0.24, 0.0, length(p - vec2(-0.38, 0.42)));
-                float body = 0.06;
-                vec3 color = mix(vec3(1.0), film, 0.65) * (rim + body) + vec3(highlight);
-                float alpha = (rim * 0.75 + body + highlight * 0.9) * vFade;
-                gl_FragColor = vec4(color, alpha);
+                float d = length(gl_PointCoord - 0.5);
+                if (d > 0.5) discard;
+                float soft = smoothstep(0.5, 0.0, d);
+                float shine = 0.55 + clamp(vLift * 2.0, -0.3, 0.6);
+                gl_FragColor = vec4(uGold * shine, soft * vAlpha * 0.95);
             }
         `,
     }));
-    bubbles.frustumCulled = false;
-    scene.add(bubbles);
+    wave.frustumCulled = false;
+    scene.add(wave);
 
-    /* Gold sparkles (matches the site's accent colour). */
-    const sparkleCount = isSmall ? 50 : 120;
-    const sparklePos = new Float32Array(sparkleCount * 3);
-    const sparkleSeed = new Float32Array(sparkleCount * 2);
-    for (let i = 0; i < sparkleCount; i++) {
-        sparklePos[i * 3] = (Math.random() - 0.5) * 2;
-        sparklePos[i * 3 + 1] = (Math.random() - 0.5) * 2;
-        sparklePos[i * 3 + 2] = -0.4 + Math.random() * 2.2;
-        sparkleSeed[i * 2] = Math.random() * Math.PI * 2;
-        sparkleSeed[i * 2 + 1] = 0.6 + Math.random() * 1.6;
+    /* A few soft out-of-focus light motes for depth. */
+    const moteCount = isSmall ? 14 : 28;
+    const motePos = new Float32Array(moteCount * 3);
+    const moteSeed = new Float32Array(moteCount * 2);
+    for (let i = 0; i < moteCount; i++) {
+        motePos[i * 3] = Math.random() * 2 - 1;
+        motePos[i * 3 + 1] = Math.random() * 2 - 1;
+        motePos[i * 3 + 2] = Math.random() * 2.6 - 0.6;
+        moteSeed[i * 2] = Math.random() * Math.PI * 2;
+        moteSeed[i * 2 + 1] = 0.4 + Math.random();
     }
-    const sparkleGeo = new THREE.BufferGeometry();
-    sparkleGeo.setAttribute('position', new THREE.BufferAttribute(sparklePos, 3));
-    sparkleGeo.setAttribute('aSeed', new THREE.BufferAttribute(sparkleSeed, 2));
-    const sparkles = new THREE.Points(sparkleGeo, new THREE.ShaderMaterial({
-        uniforms: sharedUniforms,
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    moteGeo.setAttribute('aSeed', new THREE.BufferAttribute(moteSeed, 2));
+    const motes = new THREE.Points(moteGeo, new THREE.ShaderMaterial({
+        uniforms: shared,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
@@ -411,29 +504,29 @@ function heroScene(THREE, host) {
             uniform float uTime;
             uniform vec2 uView;
             uniform float uPixelRatio;
-            varying float vTwinkle;
+            varying float vAlpha;
             void main() {
-                vec3 p = vec3(position.x * uView.x * 0.6, position.y * uView.y * 0.6, position.z);
-                p.y += sin(uTime * 0.3 + aSeed.x) * 0.08;
-                vTwinkle = pow(0.5 + 0.5 * sin(uTime * aSeed.y + aSeed.x), 3.0);
+                vec3 p = vec3(position.x * uView.x * 0.6, position.y * uView.y * 0.55, position.z);
+                p.x += sin(uTime * 0.12 * aSeed.y + aSeed.x) * 0.25;
+                p.y += cos(uTime * 0.1 * aSeed.y + aSeed.x) * 0.18;
                 vec4 mv = modelViewMatrix * vec4(p, 1.0);
-                gl_PointSize = (10.0 + 14.0 * vTwinkle) * uPixelRatio * (3.0 / -mv.z);
+                gl_PointSize = (14.0 + 26.0 * aSeed.y) * uPixelRatio * (3.0 / -mv.z);
+                vAlpha = 0.05 + 0.07 * (0.5 + 0.5 * sin(uTime * 0.5 * aSeed.y + aSeed.x));
                 gl_Position = projectionMatrix * mv;
             }
         `,
         fragmentShader: /* glsl */`
-            varying float vTwinkle;
+            uniform vec3 uGold;
+            varying float vAlpha;
             void main() {
-                vec2 p = gl_PointCoord * 2.0 - 1.0;
-                float star = max(0.0, 1.0 - abs(p.x * p.y) * 18.0 - length(p) * 0.9);
-                float core = smoothstep(0.35, 0.0, length(p));
-                float a = (star * 0.8 + core) * (0.15 + vTwinkle * 0.85);
-                gl_FragColor = vec4(vec3(0.89, 0.66, 0.34) + core * 0.4, a);
+                float d = length(gl_PointCoord - 0.5);
+                float a = smoothstep(0.5, 0.15, d) * vAlpha;
+                gl_FragColor = vec4(mix(vec3(1.0), uGold, 0.5), a);
             }
         `,
     }));
-    sparkles.frustumCulled = false;
-    scene.add(sparkles);
+    motes.frustumCulled = false;
+    scene.add(motes);
 
     /* Sizing: the photo plane always over-fills the view so its edges never show. */
     stage.resize = (w, h) => {
@@ -442,25 +535,18 @@ function heroScene(THREE, host) {
         const distance = camera.position.z - photo.position.z;
         const viewH = 2 * Math.tan((camera.fov * Math.PI) / 360) * distance;
         const viewW = viewH * camera.aspect;
-        photo.scale.set(viewW * 1.16, viewH * 1.16, 1);
-        photoUniforms.uPlaneAspect.value = viewW / viewH;
-        photoUniforms.uResolution.value.set(w * stage.renderer.getPixelRatio(), h * stage.renderer.getPixelRatio());
+        photo.scale.set(viewW * 1.18, viewH * 1.18, 1);
+        u.uPlaneAspect.value = viewW / viewH;
+        const pr = stage.renderer.getPixelRatio();
+        u.uResolution.value.set(w * pr, h * pr);
+        shared.uPixelRatio.value = pr;
         const frontH = 2 * Math.tan((camera.fov * Math.PI) / 360) * camera.position.z;
-        sharedUniforms.uView.value.set(frontH * camera.aspect, frontH);
+        shared.uView.value.set(frontH * camera.aspect, frontH);
     };
 
-    /* Pointer parallax (desktop) and scroll parallax (everyone). */
-    const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
-    if (finePointer) {
-        host.addEventListener('pointermove', (event) => {
-            const rect = host.getBoundingClientRect();
-            pointer.tx = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-            pointer.ty = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
-        });
-        host.addEventListener('pointerleave', () => { pointer.tx = 0; pointer.ty = 0; });
-    }
+    const pointer = trackPointer(host);
 
-    /* Crossfade between slide photos when the slider changes. */
+    /* Slide transitions. */
     let shownUrl = null;
     let fading = false;
     const showUrl = (url, instant) => {
@@ -468,72 +554,70 @@ function heroScene(THREE, host) {
         shownUrl = url;
         loadTexture(THREE, url).then((texture) => {
             if (url !== shownUrl) return;
-            if (instant || !photoUniforms.uTexA.value) {
-                photoUniforms.uTexA.value = texture;
-                photoUniforms.uTexB.value = texture;
-                photoUniforms.uAspectA.value = photoUniforms.uAspectB.value = texture.userData.aspect;
-                photoUniforms.uMix.value = 0;
+            if (instant || !u.uTexA.value) {
+                u.uTexA.value = u.uTexB.value = texture;
+                u.uAspectA.value = u.uAspectB.value = texture.userData.aspect;
+                u.uMix.value = 0;
             } else {
-                photoUniforms.uTexB.value = texture;
-                photoUniforms.uAspectB.value = texture.userData.aspect;
-                photoUniforms.uMix.value = 0;
+                u.uTexB.value = texture;
+                u.uAspectB.value = texture.userData.aspect;
+                u.uMix.value = 0;
                 fading = true;
             }
-            photoUniforms.uHasTex.value = 1;
+            u.uHasTex.value = 1;
         }).catch(() => {
             // If the very first photo cannot be used in WebGL, bow out and keep the CSS hero.
-            if (!photoUniforms.uTexA.value) {
-                stage.dead = true;
-                stage.frame = null;
-                stage.canvas.remove();
-                stage.renderer.dispose();
-            }
+            if (!u.uTexA.value) stage.destroy();
         });
     };
 
     if (isSlider && slides.length > 1) {
         const observer = new MutationObserver(() => showUrl(urlFor(activeIndex())));
         slides.forEach((slide) => observer.observe(slide, { attributes: true, attributeFilter: ['class'] }));
-        // Warm the cache so slide changes are instant.
         slides.forEach((_, i) => urlFor(i) && loadTexture(THREE, urlFor(i)).catch(() => {}));
     }
 
     let ready = false;
-    const reveal = () => {
-        if (ready) return;
-        ready = true;
-        host.classList.add('is-3d');
-    };
-
+    let fadeT = 0;
     stage.frame = (dt, time) => {
-        sharedUniforms.uTime.value = time;
-        photoUniforms.uTime.value = time;
+        shared.uTime.value = time;
+        u.uTime.value = time;
 
         if (fading) {
-            photoUniforms.uMix.value = Math.min(1, photoUniforms.uMix.value + dt / 0.9);
-            if (photoUniforms.uMix.value >= 1) {
-                photoUniforms.uTexA.value = photoUniforms.uTexB.value;
-                photoUniforms.uAspectA.value = photoUniforms.uAspectB.value;
-                photoUniforms.uMix.value = 0;
+            fadeT = Math.min(1, fadeT + dt / 1.4);
+            u.uMix.value = easeInOut(fadeT);
+            if (fadeT >= 1) {
+                u.uTexA.value = u.uTexB.value;
+                u.uAspectA.value = u.uAspectB.value;
+                u.uMix.value = 0;
+                fadeT = 0;
                 fading = false;
             }
         }
 
-        pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 3);
-        pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 3);
+        if (pointer.update) pointer.update(dt);
+        shared.uPointer.value.set(pointer.x, pointer.y);
+        u.uLightOn.value = damp(u.uLightOn.value, pointer.inside ? 1 : 0, 3, dt);
+        u.uLight.value.set(
+            damp(u.uLight.value.x, pointer.inside ? pointer.tx * 0.5 + 0.5 : 0.72 + Math.sin(time * 0.2) * 0.08, 3, dt),
+            damp(u.uLight.value.y, pointer.inside ? 0.5 - pointer.ty * 0.5 : 0.62 + Math.cos(time * 0.17) * 0.06, 3, dt)
+        );
 
         const rect = host.getBoundingClientRect();
         const scrolled = Math.max(0, Math.min(1, -rect.top / Math.max(1, rect.height)));
 
-        // Slow "Ken Burns" drift plus parallax, so near objects move more than the photo.
-        camera.position.x = pointer.x * 0.35 + Math.sin(time * 0.12) * 0.12;
-        camera.position.y = -pointer.y * 0.22 + Math.cos(time * 0.1) * 0.08 - scrolled * 0.6;
-        camera.position.z = 6 - Math.sin(time * 0.08) * 0.18;
-        camera.lookAt(0, -scrolled * 0.6, 0);
-        photo.position.y = -scrolled * 0.35;
+        // Slow dolly plus parallax: the photo, particles and camera move at different depths.
+        camera.position.x = pointer.x * 0.32 + Math.sin(time * 0.11) * 0.1;
+        camera.position.y = -pointer.y * 0.18 + Math.cos(time * 0.09) * 0.06 - scrolled * 0.5;
+        camera.position.z = 6 - Math.sin(time * 0.07) * 0.2 - scrolled * 0.6;
+        camera.lookAt(0, -scrolled * 0.5, 0);
+        photo.position.y = -scrolled * 0.4;
 
         stage.renderer.render(scene, camera);
-        if (photoUniforms.uHasTex.value || !firstUrl) reveal();
+        if (!ready && (u.uHasTex.value || !firstUrl)) {
+            ready = true;
+            host.classList.add('is-3d');
+        }
     };
 
     if (firstUrl) showUrl(firstUrl, true);
@@ -541,7 +625,386 @@ function heroScene(THREE, host) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Gallery: a draggable 3D ring of the site's images                     */
+/* Escrow flow                                                          */
+/* ------------------------------------------------------------------ */
+
+/** A soft studio light box, pre-filtered for realistic metal and glass reflections. */
+function studioEnvironment(THREE, renderer) {
+    const env = new THREE.Scene();
+    const room = new THREE.Mesh(
+        new THREE.SphereGeometry(10, 32, 16),
+        new THREE.ShaderMaterial({
+            side: THREE.BackSide,
+            vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+            fragmentShader: `varying vec3 vP; void main(){
+                float h = normalize(vP).y * 0.5 + 0.5;
+                vec3 c = mix(vec3(0.02, 0.10, 0.12), vec3(0.75, 0.85, 0.88), smoothstep(0.2, 1.0, h));
+                gl_FragColor = vec4(c, 1.0);
+            }`,
+        })
+    );
+    env.add(room);
+    const panel = (w, h, color, strength, pos) => {
+        const m = new THREE.Mesh(
+            new THREE.PlaneGeometry(w, h),
+            new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(strength), side: THREE.DoubleSide })
+        );
+        m.position.copy(pos);
+        m.lookAt(0, 0, 0);
+        env.add(m);
+    };
+    panel(8, 3, 0xffffff, 3.5, new THREE.Vector3(0, 7, 2));      // top softbox
+    panel(3, 6, 0xffe2b3, 2.5, new THREE.Vector3(-7, 1, 3));     // warm key
+    panel(3, 6, 0xbfe8f0, 1.6, new THREE.Vector3(7, 0, 2));      // cool fill
+    panel(6, 2, 0xffffff, 1.2, new THREE.Vector3(0, 1, -7));     // rim
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const texture = pmrem.fromScene(env, 0.03).texture;
+    pmrem.dispose();
+    return texture;
+}
+
+function roundedRectShape(THREE, w, h, r) {
+    const s = new THREE.Shape();
+    s.moveTo(-w / 2 + r, -h / 2);
+    s.lineTo(w / 2 - r, -h / 2);
+    s.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
+    s.lineTo(w / 2, h / 2 - r);
+    s.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
+    s.lineTo(-w / 2 + r, h / 2);
+    s.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
+    s.lineTo(-w / 2, -h / 2 + r);
+    s.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
+    return s;
+}
+
+/** A minimal payment-app screen drawn once onto a texture. */
+function phoneScreenTexture(THREE) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 448;
+    const g = c.getContext('2d');
+    const bg = g.createLinearGradient(0, 0, 0, c.height);
+    bg.addColorStop(0, '#13606F');
+    bg.addColorStop(1, '#082831');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, c.width, c.height);
+    const pill = (x, y, w, h, color) => {
+        g.fillStyle = color;
+        g.beginPath();
+        g.roundRect ? g.roundRect(x, y, w, h, h / 2) : g.rect(x, y, w, h);
+        g.fill();
+    };
+    pill(28, 36, 90, 12, 'rgba(255,255,255,0.35)');
+    // Shield badge
+    g.fillStyle = 'rgba(227,168,87,0.18)';
+    g.beginPath();
+    g.arc(128, 150, 58, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#E3A857';
+    g.lineWidth = 9;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.beginPath();
+    g.moveTo(102, 152);
+    g.lineTo(121, 171);
+    g.lineTo(156, 132);
+    g.stroke();
+    pill(58, 236, 140, 16, 'rgba(255,255,255,0.85)');
+    pill(78, 266, 100, 10, 'rgba(255,255,255,0.35)');
+    pill(28, 316, 200, 10, 'rgba(255,255,255,0.15)');
+    pill(28, 338, 160, 10, 'rgba(255,255,255,0.15)');
+    pill(28, 380, 200, 40, '#E3A857');
+    const texture = new THREE.CanvasTexture(c);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+function contactShadow(THREE, size) {
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(size, size * 0.45),
+        new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            uniforms: { uStrength: { value: 0.45 } },
+            vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+            fragmentShader: 'uniform float uStrength; varying vec2 vUv; void main(){ vec2 p = (vUv - 0.5) * 2.0; float a = exp(-dot(p,p) * 2.6) * uStrength; gl_FragColor = vec4(0.0, 0.05, 0.07, a); }',
+        })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    return mesh;
+}
+
+function escrowScene(THREE, host) {
+    const stageEl = host.querySelector('[data-escrow-stage]') || host;
+    const labels = Array.from(host.querySelectorAll('[data-escrow-label]'));
+    const band = host.closest('.band');
+    const steps = band ? Array.from(band.querySelectorAll('.band-step')) : [];
+
+    const stage = createStage(THREE, host, { linear: false, className: 'three-canvas--escrow' });
+    stageEl.appendChild(stage.canvas);
+    const renderer = stage.renderer;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+
+    const scene = new THREE.Scene();
+    scene.environment = studioEnvironment(THREE, renderer);
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(3, 5, 6);
+    scene.add(key);
+    const glow = new THREE.PointLight(0xe3a857, 0, 6, 1.8);
+    glow.position.set(0, 0.2, 1.4);
+    scene.add(glow);
+
+    const gold = new THREE.MeshPhysicalMaterial({ color: 0xe3a857, metalness: 1, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.2 });
+    const tealGloss = new THREE.MeshPhysicalMaterial({ color: 0x0f4c5c, metalness: 0.15, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.08 });
+    const ceramic = new THREE.MeshPhysicalMaterial({ color: 0xf3f6f7, metalness: 0, roughness: 0.32, clearcoat: 0.8, clearcoatRoughness: 0.15 });
+    const graphite = new THREE.MeshPhysicalMaterial({ color: 0x1b2328, metalness: 0.6, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 });
+    const windowGlow = new THREE.MeshStandardMaterial({ color: 0xffe7b8, emissive: 0xe3a857, emissiveIntensity: 0.35, roughness: 0.4 });
+
+    const extrude = (shape, depth, bevel = 0.04) => {
+        const geo = new THREE.ExtrudeGeometry(shape, {
+            depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 5, curveSegments: 24,
+        });
+        geo.center();
+        return geo;
+    };
+
+    /* Client: a smartphone paying in. */
+    const client = new THREE.Group();
+    const body = new THREE.Mesh(extrude(roundedRectShape(THREE, 0.68, 1.3, 0.14), 0.07, 0.03), graphite);
+    client.add(body);
+    const screen = new THREE.Mesh(
+        new THREE.ShapeGeometry(roundedRectShape(THREE, 0.6, 1.2, 0.1), 12),
+        new THREE.MeshPhysicalMaterial({ map: phoneScreenTexture(THREE), roughness: 0.05, clearcoat: 1, emissive: 0xffffff, emissiveIntensity: 0.25 })
+    );
+    // ShapeGeometry UVs are in shape units; remap to 0..1 for the texture.
+    const uv = screen.geometry.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 0.6 + 0.5, uv.getY(i) / 1.2 + 0.5);
+    screen.material.emissiveMap = screen.material.map;
+    screen.position.z = 0.068;
+    client.add(screen);
+    scene.add(client);
+
+    /* Escrow: a lacquered shield with a gold rim and check. */
+    const shield = new THREE.Group();
+    const shieldShape = new THREE.Shape();
+    shieldShape.moveTo(0, 0.78);
+    shieldShape.bezierCurveTo(0.32, 0.64, 0.5, 0.62, 0.64, 0.64);
+    shieldShape.bezierCurveTo(0.66, 0.05, 0.48, -0.48, 0, -0.8);
+    shieldShape.bezierCurveTo(-0.48, -0.48, -0.66, 0.05, -0.64, 0.64);
+    shieldShape.bezierCurveTo(-0.5, 0.62, -0.32, 0.64, 0, 0.78);
+    shield.add(new THREE.Mesh(extrude(shieldShape, 0.14, 0.06), tealGloss));
+    const rim = new THREE.Mesh(extrude(shieldShape, 0.06, 0.03), gold);
+    rim.scale.set(1.09, 1.08, 1);
+    rim.position.z = -0.07;
+    shield.add(rim);
+    const check = new THREE.Shape();
+    check.moveTo(-0.32, 0.04);
+    check.lineTo(-0.08, -0.22);
+    check.lineTo(0.34, 0.2);
+    check.lineTo(0.25, 0.29);
+    check.lineTo(-0.08, -0.04);
+    check.lineTo(-0.23, 0.13);
+    check.lineTo(-0.32, 0.04);
+    const checkMesh = new THREE.Mesh(extrude(check, 0.05, 0.02), gold);
+    checkMesh.position.set(0, 0.02, 0.14);
+    shield.add(checkMesh);
+    scene.add(shield);
+
+    /* Maid: a home with a warm lit window. */
+    const house = new THREE.Group();
+    const walls = new THREE.Shape();
+    walls.moveTo(-0.5, -0.5);
+    walls.lineTo(0.5, -0.5);
+    walls.lineTo(0.5, 0.2);
+    walls.lineTo(0, 0.62);
+    walls.lineTo(-0.5, 0.2);
+    walls.lineTo(-0.5, -0.5);
+    house.add(new THREE.Mesh(extrude(walls, 0.5, 0.03), ceramic));
+    const roofShape = new THREE.Shape();
+    roofShape.moveTo(-0.68, 0.12);
+    roofShape.lineTo(0, 0.72);
+    roofShape.lineTo(0.68, 0.12);
+    roofShape.lineTo(0.56, 0.03);
+    roofShape.lineTo(0, 0.54);
+    roofShape.lineTo(-0.56, 0.03);
+    roofShape.lineTo(-0.68, 0.12);
+    const roof = new THREE.Mesh(extrude(roofShape, 0.62, 0.03), tealGloss);
+    roof.position.y = 0.33;
+    house.add(roof);
+    const door = new THREE.Mesh(extrude(roundedRectShape(THREE, 0.22, 0.36, 0.06), 0.04, 0.01), gold);
+    door.position.set(-0.15, -0.3, 0.28);
+    house.add(door);
+    const win = new THREE.Mesh(extrude(roundedRectShape(THREE, 0.2, 0.2, 0.03), 0.03, 0.01), windowGlow);
+    win.position.set(0.2, -0.12, 0.28);
+    house.add(win);
+    scene.add(house);
+
+    const shadows = [contactShadow(THREE, 1.6), contactShadow(THREE, 1.9), contactShadow(THREE, 1.9)];
+    shadows.forEach((s) => scene.add(s));
+
+    /* Coin: lathe-turned with a raised rim. */
+    const profile = [
+        [0, -0.028], [0.15, -0.028], [0.172, -0.02], [0.176, 0], [0.172, 0.02], [0.15, 0.028],
+        [0.128, 0.028], [0.12, 0.016], [0, 0.016],
+    ].map(([x, y]) => new THREE.Vector2(x, y));
+    const coinGeo = new THREE.LatheGeometry(profile, 48);
+    coinGeo.rotateX(Math.PI / 2);
+    const coin = new THREE.Group();
+    coin.add(new THREE.Mesh(coinGeo, gold));
+    const back = new THREE.Mesh(coinGeo, gold);
+    back.rotation.y = Math.PI;
+    coin.add(back);
+    scene.add(coin);
+
+    /* Animated dashed routes between the three stations. */
+    const routeMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: { uTime: { value: 0 }, uGold: { value: new THREE.Vector3(...GOLD) } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: `uniform float uTime; uniform vec3 uGold; varying vec2 vUv;
+            void main(){
+                float dash = step(0.45, fract(vUv.x * 26.0 - uTime * 0.9));
+                float ends = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+                gl_FragColor = vec4(uGold, dash * ends * 0.55);
+            }`,
+    });
+    const curveA = new THREE.QuadraticBezierCurve3(new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3());
+    const curveB = new THREE.QuadraticBezierCurve3(new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3());
+    let routeA = null;
+    let routeB = null;
+
+    /* Pulse rings for "received" moments. */
+    const ringGeo = new THREE.RingGeometry(0.9, 0.93, 64);
+    const makeRing = () => {
+        const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xe3a857, transparent: true, opacity: 0, depthWrite: false }));
+        scene.add(ring);
+        return ring;
+    };
+    const shieldRing = makeRing();
+    const houseRing = makeRing();
+
+    let spread = 2.6;
+    const layout = () => {
+        client.position.set(-spread, 0, 0);
+        shield.position.set(0, 0, 0);
+        house.position.set(spread, -0.02, 0);
+        shadows[0].position.set(-spread, -0.92, 0);
+        shadows[1].position.set(0, -0.92, 0);
+        shadows[2].position.set(spread, -0.92, 0);
+        shieldRing.position.set(0, 0, 0.2);
+        houseRing.position.set(spread, 0.05, 0.4);
+        curveA.v0.set(-spread + 0.3, 0.25, 0.25);
+        curveA.v1.set(-spread / 2, 1.25, 0.7);
+        curveA.v2.set(-0.05, 0.1, 0.45);
+        curveB.v0.set(0.05, 0.1, 0.45);
+        curveB.v1.set(spread / 2, 1.25, 0.7);
+        curveB.v2.set(spread - 0.25, 0.1, 0.45);
+        [routeA, routeB].forEach((r) => { if (r) { scene.remove(r); r.geometry.dispose(); } });
+        routeA = new THREE.Mesh(new THREE.TubeGeometry(curveA, 80, 0.008, 6, false), routeMat);
+        routeB = new THREE.Mesh(new THREE.TubeGeometry(curveB, 80, 0.008, 6, false), routeMat);
+        scene.add(routeA, routeB);
+    };
+
+    stage.resize = (w, h) => {
+        camera.aspect = w / h;
+        const next = camera.aspect < 1.6 ? 1.8 : 2.6;
+        if (next !== spread || !routeA) {
+            spread = next;
+            layout();
+        }
+        const tan = Math.tan((camera.fov * Math.PI) / 360);
+        const fitWidth = (spread * 2 + 1.7) / (2 * tan * camera.aspect);
+        const fitHeight = 2.3 / (2 * tan);
+        camera.userData.distance = Math.max(fitWidth, fitHeight);
+        camera.updateProjectionMatrix();
+    };
+
+    const pointer = trackPointer(host.closest('.band') || host);
+    const cycle = 6.5;
+    let activeStep = -1;
+    const setStep = (index) => {
+        if (index === activeStep) return;
+        activeStep = index;
+        labels.forEach((el, i) => el.classList.toggle('is-active', i === index));
+        steps.forEach((el, i) => el.classList.toggle('is-active', i === index));
+    };
+    if (steps.length) band.classList.add('has-escrow-3d');
+
+    stage.frame = (dt, time) => {
+        if (pointer.update) pointer.update(dt);
+        const d = camera.userData.distance || 8;
+        camera.position.set(pointer.x * 0.6, 0.35 - pointer.y * 0.25, d);
+        camera.lookAt(0, 0.05, 0);
+
+        routeMat.uniforms.uTime.value = time;
+
+        // Idle motion: everything floats gently and turns towards the viewer.
+        client.rotation.set(0.05, 0.35 + Math.sin(time * 0.7) * 0.18, -0.04);
+        client.position.y = Math.sin(time * 1.1) * 0.05;
+        shield.rotation.y = Math.sin(time * 0.6) * 0.3;
+        shield.position.y = Math.sin(time * 1.1 + 1) * 0.05;
+        house.rotation.y = -0.45 + Math.sin(time * 0.65) * 0.15;
+        house.position.y = -0.02 + Math.sin(time * 1.1 + 2) * 0.05;
+        [client, shield, house].forEach((obj, i) => {
+            shadows[i].material.uniforms.uStrength.value = 0.42 - obj.position.y * 0.8;
+        });
+
+        // Timeline: pay -> held in escrow -> released to the maid.
+        const t = (time % cycle) / cycle;
+        let held = 0;
+        if (t < 0.3) {
+            setStep(0);
+            const k = easeInOut(t / 0.3);
+            coin.position.copy(curveA.getPoint(k));
+            coin.scale.setScalar(Math.min(1, t / 0.04));
+            coin.rotation.y += dt * 6;
+        } else if (t < 0.62) {
+            setStep(1);
+            const k = (t - 0.3) / 0.32;
+            held = Math.sin(Math.min(1, k * 1.2) * Math.PI * 0.5) * (1 - Math.max(0, (k - 0.85) / 0.15));
+            coin.position.set(0, 0.1 + Math.sin(time * 3) * 0.02, 0.45 - easeOut(Math.min(1, k * 2)) * 0.15);
+            coin.scale.setScalar(1 - 0.35 * Math.sin(Math.min(1, k) * Math.PI));
+            coin.rotation.y += dt * 2.5;
+        } else if (t < 0.9) {
+            setStep(2);
+            const k = easeInOut((t - 0.62) / 0.28);
+            coin.position.copy(curveB.getPoint(k));
+            coin.scale.setScalar(1);
+            coin.rotation.y += dt * 6;
+        } else {
+            setStep(2);
+            coin.scale.setScalar(Math.max(0.001, 1 - (t - 0.9) / 0.06));
+        }
+
+        const pulse = (ring, start) => {
+            const p = (t - start) / 0.16;
+            if (p >= 0 && p <= 1) {
+                ring.scale.setScalar(0.5 + easeOut(p) * 0.7);
+                ring.material.opacity = (1 - p) * 0.7;
+            } else {
+                ring.material.opacity = 0;
+            }
+        };
+        pulse(shieldRing, 0.3);
+        pulse(houseRing, 0.9);
+
+        glow.intensity = held * 6;
+        shield.scale.setScalar(1 + held * 0.05);
+        windowGlow.emissiveIntensity = 0.35 + (t > 0.9 ? (1 - (t - 0.9) / 0.1) * 1.4 : 0);
+
+        renderer.render(scene, camera);
+        host.classList.add('is-3d');
+    };
+
+    stage.start();
+}
+
+/* ------------------------------------------------------------------ */
+/* Gallery: curved 3D carousel                                          */
 /* ------------------------------------------------------------------ */
 
 function galleryScene(THREE, host) {
@@ -553,142 +1016,199 @@ function galleryScene(THREE, host) {
 
     const viewport = host.querySelector('[data-gallery-stage]');
     const caption = host.querySelector('[data-gallery-caption]');
+    const counter = host.querySelector('[data-gallery-counter]');
+    const progress = host.querySelector('[data-gallery-progress]');
+    const prevBtn = host.querySelector('[data-gallery-prev]');
+    const nextBtn = host.querySelector('[data-gallery-next]');
     if (!viewport) return;
 
     const stage = createStage(THREE, host, { className: 'three-canvas--gallery' });
     viewport.appendChild(stage.canvas);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 80);
 
-    const cardW = 1.6;
-    const cardH = 1.1;
     const count = items.length;
-    const radius = Math.max(2.3, (count * (cardW + 0.35)) / (Math.PI * 2));
+    const cardW = 1.8;
+    const cardH = 1.2;
+    const gap = 0.28;
+    const radius = Math.max(3.0, (count * (cardW + gap)) / (Math.PI * 2));
+    const step = (Math.PI * 2) / count;
     const ring = new THREE.Group();
     scene.add(ring);
 
-    const cardGeo = new THREE.PlaneGeometry(cardW, cardH, 1, 1);
+    // Bend a plane onto the ring's cylinder so every card is gently curved.
+    const cardGeo = new THREE.PlaneGeometry(cardW, cardH, 32, 1);
+    const pos = cardGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const a = x / radius;
+        pos.setXYZ(i, Math.sin(a) * radius, pos.getY(i), Math.cos(a) * radius);
+    }
+    pos.needsUpdate = true;
+    cardGeo.computeVertexNormals();
+
+    const cardVertex = /* glsl */`
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+    const cardFragment = /* glsl */`
+        uniform sampler2D uMap;
+        uniform float uHasMap;
+        uniform float uImageAspect;
+        uniform float uCardAspect;
+        uniform float uShade;
+        uniform float uFocus;
+        uniform float uReflect;
+        uniform float uTime;
+        uniform vec3 uGold;
+        varying vec2 vUv;
+        float roundedBox(vec2 p, vec2 b, float r) {
+            vec2 q = abs(p) - b + r;
+            return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+        }
+        void main() {
+            vec2 p = (vUv - 0.5) * vec2(uCardAspect, 1.0);
+            float d = roundedBox(p, vec2(uCardAspect * 0.5, 0.5), 0.06);
+            float mask = 1.0 - smoothstep(-0.004, 0.0, d);
+            vec2 scale = uCardAspect > uImageAspect
+                ? vec2(1.0, uImageAspect / uCardAspect)
+                : vec2(uCardAspect / uImageAspect, 1.0);
+            float zoom = 1.0 + uFocus * 0.04;
+            vec3 color = uHasMap > 0.5
+                ? texture2D(uMap, (vUv - 0.5) * scale / zoom + 0.5).rgb
+                : vec3(0.06, 0.3, 0.36);
+            // Glossy sheen sweeping across the focused card.
+            float sweep = smoothstep(0.12, 0.0, abs(vUv.x - vUv.y * 0.3 - fract(uTime * 0.12) * 1.6 + 0.3));
+            color += sweep * 0.08 * uFocus;
+            // Hairline gold edge that brightens on the focused card.
+            float edge = smoothstep(-0.012, -0.004, d);
+            color = mix(color, uGold, edge * (0.35 + 0.65 * uFocus));
+            color *= uShade;
+            float alpha = mask;
+            if (uReflect > 0.5) alpha *= smoothstep(0.45, 1.0, vUv.y) * 0.18;
+            if (alpha < 0.01) discard;
+            gl_FragColor = vec4(color, alpha);
+        }
+    `;
+
+    const time = { value: 0 };
+    const goldU = { value: new THREE.Vector3(...GOLD) };
+    const meshes = [];
     const cards = items.map((item, i) => {
-        const uniforms = {
+        const shared = {
             uMap: { value: null },
             uHasMap: { value: 0 },
             uImageAspect: { value: 1.5 },
             uCardAspect: { value: cardW / cardH },
-            uShade: { value: 1 },
-            uReflect: { value: 0 },
+            uFocus: { value: 0 },
+            uTime: time,
+            uGold: goldU,
         };
         const material = new THREE.ShaderMaterial({
-            uniforms,
+            uniforms: { ...shared, uShade: { value: 1 }, uReflect: { value: 0 } },
+            vertexShader: cardVertex,
+            fragmentShader: cardFragment,
             transparent: true,
             side: THREE.DoubleSide,
-            depthWrite: true,
-            vertexShader: /* glsl */`
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: /* glsl */`
-                uniform sampler2D uMap;
-                uniform float uHasMap;
-                uniform float uImageAspect;
-                uniform float uCardAspect;
-                uniform float uShade;
-                uniform float uReflect;
-                varying vec2 vUv;
-                float roundedBox(vec2 p, vec2 b, float r) {
-                    vec2 q = abs(p) - b + r;
-                    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-                }
-                void main() {
-                    vec2 p = (vUv - 0.5) * vec2(uCardAspect, 1.0);
-                    float d = roundedBox(p, vec2(uCardAspect * 0.5, 0.5), 0.07);
-                    float mask = 1.0 - smoothstep(-0.006, 0.0, d);
-                    vec2 scale = uCardAspect > uImageAspect
-                        ? vec2(1.0, uImageAspect / uCardAspect)
-                        : vec2(uCardAspect / uImageAspect, 1.0);
-                    vec3 color = uHasMap > 0.5
-                        ? texture2D(uMap, (vUv - 0.5) * scale + 0.5).rgb
-                        : vec3(0.91, 0.95, 0.96);
-                    // Thin gold frame on the edge.
-                    float frame = smoothstep(-0.018, -0.008, d);
-                    color = mix(color, vec3(0.89, 0.66, 0.34), frame * 0.9);
-                    color *= uShade;
-                    float alpha = mask;
-                    if (uReflect > 0.5) alpha *= smoothstep(0.35, 1.0, vUv.y) * 0.22;
-                    if (alpha < 0.01) discard;
-                    gl_FragColor = vec4(color, alpha);
-                }
-            `,
+        });
+        const reflectionMaterial = new THREE.ShaderMaterial({
+            uniforms: { ...shared, uShade: material.uniforms.uShade, uReflect: { value: 1 } },
+            vertexShader: cardVertex,
+            fragmentShader: cardFragment,
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
         });
 
-        const angle = (i / count) * Math.PI * 2;
         const holder = new THREE.Group();
-        holder.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-        holder.rotation.y = angle;
-
+        holder.rotation.y = i * step;
         const card = new THREE.Mesh(cardGeo, material);
+        card.userData.index = i;
         holder.add(card);
-
-        const reflection = new THREE.Mesh(cardGeo, material.clone());
-        reflection.material.uniforms = {
-            ...uniforms,
-            uShade: { value: 1 },
-            uReflect: { value: 1 },
-        };
+        meshes.push(card);
+        const reflection = new THREE.Mesh(cardGeo, reflectionMaterial);
         reflection.scale.y = -1;
-        reflection.position.y = -cardH - 0.06;
+        reflection.position.y = -cardH - 0.08;
         holder.add(reflection);
-
         ring.add(holder);
 
         loadTexture(THREE, item.src).then((texture) => {
-            uniforms.uMap.value = texture;
-            uniforms.uImageAspect.value = texture.userData.aspect;
-            uniforms.uHasMap.value = 1;
+            shared.uMap.value = texture;
+            shared.uImageAspect.value = texture.userData.aspect;
+            shared.uHasMap.value = 1;
         }).catch(() => {});
 
-        return { holder, uniforms, reflectionUniforms: reflection.material.uniforms, angle };
+        return { holder, card, uniforms: material.uniforms, focus: 0 };
     });
 
-    // Soft gold glow on the "floor".
     const floor = new THREE.Mesh(
-        new THREE.CircleGeometry(radius * 1.25, 48),
+        new THREE.CircleGeometry(radius * 1.3, 64),
         new THREE.ShaderMaterial({
             transparent: true,
             depthWrite: false,
             vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-            fragmentShader: 'varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.0; gl_FragColor = vec4(0.06, 0.30, 0.36, (1.0 - smoothstep(0.0, 1.0, d)) * 0.18); }',
+            fragmentShader: 'varying vec2 vUv; void main(){ float d = length(vUv - vec2(0.5, 0.8)) * 2.2; gl_FragColor = vec4(0.89, 0.66, 0.34, (1.0 - smoothstep(0.0, 1.0, d)) * 0.08); }',
         })
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -cardH / 2 - 0.04;
+    floor.position.y = -cardH / 2 - 0.05;
     scene.add(floor);
 
     stage.resize = (w, h) => {
         camera.aspect = w / h;
         const tan = Math.tan((camera.fov * Math.PI) / 360);
-        const fitWidth = (cardW * (isSmall ? 1.3 : 2.0)) / (2 * tan * camera.aspect);
-        const fitHeight = (cardH * 1.85) / (2 * tan);
-        const distance = Math.max(fitWidth, fitHeight);
-        camera.position.set(0, 0.5, radius + distance);
-        camera.lookAt(0, -0.1, radius * 0.25);
+        const fitWidth = (cardW * (isSmall ? 1.25 : 2.1)) / (2 * tan * camera.aspect);
+        const fitHeight = (cardH * 1.75) / (2 * tan);
+        camera.userData.distance = Math.max(fitWidth, fitHeight);
         camera.updateProjectionMatrix();
     };
 
-    /* Drag / swipe to spin, with inertia. Vertical swipes still scroll the page. */
+    /* Interaction: drag/swipe with snapping, arrows, keys, click a card, autoplay. */
     let rotation = 0;
-    let velocity = 0;
+    let target = 0;
     let dragging = false;
+    let moved = 0;
     let lastX = 0;
-    let idle = 0;
+    let velocity = 0;
+    let lastInteraction = -10;
+    let hovering = false;
+    let clock = 0;
     const canvas = stage.canvas;
     canvas.style.touchAction = 'pan-y';
 
+    const indexFor = (rot) => ((Math.round(-rot / step) % count) + count) % count;
+    const goTo = (index) => {
+        const current = indexFor(target);
+        let delta = index - current;
+        if (delta > count / 2) delta -= count;
+        if (delta < -count / 2) delta += count;
+        target -= delta * step;
+        lastInteraction = clock;
+    };
+    const go = (dir) => {
+        target = Math.round(target / step) * step - dir * step;
+        lastInteraction = clock;
+    };
+
+    if (prevBtn) prevBtn.addEventListener('click', () => go(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => go(1));
+    host.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowLeft') { event.preventDefault(); go(-1); }
+        if (event.key === 'ArrowRight') { event.preventDefault(); go(1); }
+    });
+    host.addEventListener('pointerenter', () => { hovering = true; });
+    host.addEventListener('pointerleave', () => { hovering = false; });
+
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+
     canvas.addEventListener('pointerdown', (event) => {
         dragging = true;
+        moved = 0;
         lastX = event.clientX;
         velocity = 0;
         canvas.setPointerCapture(event.pointerId);
@@ -698,57 +1218,72 @@ function galleryScene(THREE, host) {
         if (!dragging) return;
         const dx = event.clientX - lastX;
         lastX = event.clientX;
-        const delta = (dx / Math.max(1, stage.width)) * Math.PI * 1.4;
+        moved += Math.abs(dx);
+        const delta = (dx / Math.max(1, stage.width)) * Math.PI * 1.2;
         rotation += delta;
-        velocity = delta * 60;
-        idle = 0;
+        target = rotation;
+        velocity = damp(velocity, delta * 60, 20, 1 / 60);
+        lastInteraction = clock;
     });
-    const release = () => {
+    const release = (event) => {
+        if (!dragging) return;
         dragging = false;
         host.classList.remove('is-dragging');
+        if (moved < 6 && event && event.type === 'pointerup') {
+            const rect = canvas.getBoundingClientRect();
+            ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+            raycaster.setFromCamera(ndc, camera);
+            const hit = raycaster.intersectObjects(meshes, false)[0];
+            if (hit) goTo(hit.object.userData.index);
+            return;
+        }
+        // Throw with momentum, then settle on the nearest card.
+        target = Math.round((rotation + velocity * 0.18) / step) * step;
     };
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
 
-    // Keyboard support on the wrapper (arrow keys rotate one card).
-    host.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        velocity = (event.key === 'ArrowLeft' ? 1 : -1) * ((Math.PI * 2) / count) * 3.2;
-        idle = 0;
-    });
-
     let front = -1;
-    const worldPos = new THREE.Vector3();
+    const autoplayEvery = 4.5;
+    let autoTimer = 0;
 
-    stage.frame = (dt, time) => {
-        idle += dt;
+    stage.frame = (dt, t) => {
+        clock = t;
+        time.value = t;
+
         if (!dragging) {
-            rotation += velocity * dt;
-            velocity *= Math.pow(0.04, dt);
-            if (Math.abs(velocity) < 0.02 && idle > 2) rotation -= dt * 0.18; // gentle auto-spin
+            rotation = damp(rotation, target, 5.5, dt);
+            const idle = t - lastInteraction > 6 && !hovering;
+            autoTimer = idle ? autoTimer + dt : 0;
+            if (autoTimer > autoplayEvery) {
+                autoTimer = 0;
+                target = Math.round(target / step) * step - step;
+            }
+            if (progress) progress.style.transform = 'scaleX(' + Math.min(1, autoTimer / autoplayEvery).toFixed(3) + ')';
         }
         ring.rotation.y = rotation;
-        ring.position.y = Math.sin(time * 0.8) * 0.04;
 
-        let best = -Infinity;
-        let bestIndex = 0;
+        const dist = camera.userData.distance || 6;
+        camera.position.set(0, 0.42, radius + dist);
+        camera.lookAt(0, -0.05, radius - 1.0);
+
+        const idx = indexFor(rotation);
         cards.forEach((card, i) => {
-            card.holder.getWorldPosition(worldPos);
-            const facing = worldPos.z / radius; // 1 = front, -1 = back
-            const shade = 0.45 + 0.55 * (facing * 0.5 + 0.5);
-            card.uniforms.uShade.value = shade;
-            card.reflectionUniforms.uShade.value = shade;
-            card.holder.position.y = Math.sin(time * 1.1 + i) * 0.03;
-            if (facing > best) {
-                best = facing;
-                bestIndex = i;
-            }
+            const angle = i * step + rotation;
+            const facing = Math.cos(angle); // 1 = front, -1 = back
+            card.uniforms.uShade.value = 0.35 + 0.65 * Math.pow(facing * 0.5 + 0.5, 1.4);
+            card.focus = damp(card.focus, i === idx ? 1 : 0, 6, dt);
+            card.uniforms.uFocus.value = card.focus;
+            const s = 1 + card.focus * 0.06;
+            card.card.scale.set(s, s, 1);
+            card.card.position.z = card.focus * 0.12;
+            card.holder.position.y = Math.sin(t * 0.9 + i) * 0.02;
         });
 
-        if (bestIndex !== front) {
-            front = bestIndex;
+        if (idx !== front) {
+            front = idx;
             if (caption) caption.textContent = items[front].title;
+            if (counter) counter.textContent = String(front + 1).padStart(2, '0') + ' / ' + String(count).padStart(2, '0');
         }
 
         stage.renderer.render(scene, camera);
@@ -756,190 +1291,4 @@ function galleryScene(THREE, host) {
     };
 
     stage.start();
-}
-
-/* ------------------------------------------------------------------ */
-/* Escrow: client -> shield -> maid, with gold coins                    */
-/* ------------------------------------------------------------------ */
-
-function escrowScene(THREE, host) {
-    const stageEl = host.querySelector('[data-escrow-stage]') || host;
-    const stage = createStage(THREE, host, { linear: false, className: 'three-canvas--escrow' });
-    stageEl.appendChild(stage.canvas);
-    stage.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
-
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x0f4c5c, 1.6));
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
-    key.position.set(2, 4, 5);
-    scene.add(key);
-    const glow = new THREE.PointLight(0xe3a857, 6, 8, 1.6);
-    glow.position.set(0, 0.6, 1.6);
-    scene.add(glow);
-
-    const gold = new THREE.MeshStandardMaterial({ color: 0xe3a857, metalness: 0.85, roughness: 0.28 });
-    const teal = new THREE.MeshStandardMaterial({ color: 0x1b7f94, metalness: 0.2, roughness: 0.35 });
-    const white = new THREE.MeshStandardMaterial({ color: 0xf4f7f8, metalness: 0.05, roughness: 0.45 });
-
-    const extrude = (shape, depth) => {
-        const geo = new THREE.ExtrudeGeometry(shape, {
-            depth, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 3, curveSegments: 16,
-        });
-        geo.center();
-        return geo;
-    };
-
-    /* Client: a phone paying in. */
-    const client = new THREE.Group();
-    const phoneShape = new THREE.Shape();
-    const pw = 0.62, ph = 1.1, pr = 0.12;
-    phoneShape.moveTo(-pw / 2 + pr, -ph / 2);
-    phoneShape.lineTo(pw / 2 - pr, -ph / 2);
-    phoneShape.quadraticCurveTo(pw / 2, -ph / 2, pw / 2, -ph / 2 + pr);
-    phoneShape.lineTo(pw / 2, ph / 2 - pr);
-    phoneShape.quadraticCurveTo(pw / 2, ph / 2, pw / 2 - pr, ph / 2);
-    phoneShape.lineTo(-pw / 2 + pr, ph / 2);
-    phoneShape.quadraticCurveTo(-pw / 2, ph / 2, -pw / 2, ph / 2 - pr);
-    phoneShape.lineTo(-pw / 2, -ph / 2 + pr);
-    phoneShape.quadraticCurveTo(-pw / 2, -ph / 2, -pw / 2 + pr, -ph / 2);
-    client.add(new THREE.Mesh(extrude(phoneShape, 0.08), white));
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(pw * 0.78, ph * 0.74), teal);
-    screen.position.z = 0.1;
-    client.add(screen);
-    const payDot = new THREE.Mesh(new THREE.CircleGeometry(0.11, 24), gold);
-    payDot.position.set(0, -0.05, 0.11);
-    client.add(payDot);
-    scene.add(client);
-
-    /* Escrow: a shield with a gold check mark. */
-    const shield = new THREE.Group();
-    const shieldShape = new THREE.Shape();
-    shieldShape.moveTo(0, 0.72);
-    shieldShape.bezierCurveTo(0.3, 0.6, 0.48, 0.58, 0.6, 0.6);
-    shieldShape.bezierCurveTo(0.62, 0.05, 0.45, -0.45, 0, -0.75);
-    shieldShape.bezierCurveTo(-0.45, -0.45, -0.62, 0.05, -0.6, 0.6);
-    shieldShape.bezierCurveTo(-0.48, 0.58, -0.3, 0.6, 0, 0.72);
-    shield.add(new THREE.Mesh(extrude(shieldShape, 0.16), teal));
-    const rim = new THREE.Mesh(extrude(shieldShape, 0.05), gold);
-    rim.scale.set(1.1, 1.1, 1);
-    rim.position.z = -0.08;
-    shield.add(rim);
-    const check = new THREE.Shape();
-    check.moveTo(-0.28, 0.02);
-    check.lineTo(-0.08, -0.2);
-    check.lineTo(0.3, 0.24);
-    check.lineTo(0.22, 0.31);
-    check.lineTo(-0.08, -0.04);
-    check.lineTo(-0.2, -0.06);
-    check.lineTo(-0.28, 0.02);
-    const checkMesh = new THREE.Mesh(extrude(check, 0.06), gold);
-    checkMesh.position.z = 0.16;
-    shield.add(checkMesh);
-    scene.add(shield);
-
-    /* Maid: a little house that gets paid. */
-    const house = new THREE.Group();
-    const houseShape = new THREE.Shape();
-    houseShape.moveTo(-0.5, -0.5);
-    houseShape.lineTo(0.5, -0.5);
-    houseShape.lineTo(0.5, 0.15);
-    houseShape.lineTo(0, 0.6);
-    houseShape.lineTo(-0.5, 0.15);
-    houseShape.lineTo(-0.5, -0.5);
-    house.add(new THREE.Mesh(extrude(houseShape, 0.4), white));
-    const roofShape = new THREE.Shape();
-    roofShape.moveTo(-0.66, 0.1);
-    roofShape.lineTo(0, 0.7);
-    roofShape.lineTo(0.66, 0.1);
-    roofShape.lineTo(0.54, 0.02);
-    roofShape.lineTo(0, 0.52);
-    roofShape.lineTo(-0.54, 0.02);
-    roofShape.lineTo(-0.66, 0.1);
-    const roof = new THREE.Mesh(extrude(roofShape, 0.5), teal);
-    roof.position.y = 0.33;
-    house.add(roof);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.36, 0.05), gold);
-    door.position.set(0, -0.3, 0.26);
-    house.add(door);
-    scene.add(house);
-
-    /* Coins travelling along arcs. */
-    const coinGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.05, 32);
-    coinGeo.rotateX(Math.PI / 2);
-    const coins = [0, 1, 2].map((i) => {
-        const coin = new THREE.Mesh(coinGeo, gold);
-        coin.userData.offset = i / 3;
-        scene.add(coin);
-        return coin;
-    });
-
-    let spread = 2.6;
-    const curveA = new THREE.QuadraticBezierCurve3(new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3());
-    const curveB = new THREE.QuadraticBezierCurve3(new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3());
-    const layout = () => {
-        client.position.set(-spread, 0, 0);
-        shield.position.set(0, 0, 0);
-        house.position.set(spread, 0, 0);
-        curveA.v0.set(-spread + 0.2, 0.2, 0.3);
-        curveA.v1.set(-spread / 2, 1.3, 0.6);
-        curveA.v2.set(-0.2, 0.15, 0.4);
-        curveB.v0.set(0.2, 0.15, 0.4);
-        curveB.v1.set(spread / 2, 1.3, 0.6);
-        curveB.v2.set(spread - 0.2, 0.1, 0.4);
-    };
-
-    stage.resize = (w, h) => {
-        camera.aspect = w / h;
-        spread = camera.aspect < 1.6 ? 1.75 : 2.6;
-        layout();
-        const tan = Math.tan((camera.fov * Math.PI) / 360);
-        const fitWidth = (spread * 2 + 1.6) / (2 * tan * camera.aspect);
-        const fitHeight = 2.2 / (2 * tan);
-        camera.position.set(0, 0.25, Math.max(fitWidth, fitHeight));
-        camera.lookAt(0, 0.1, 0);
-        camera.updateProjectionMatrix();
-    };
-
-    const cycle = 4.2;
-    stage.frame = (dt, time) => {
-        client.rotation.y = Math.sin(time * 0.8) * 0.35;
-        client.position.y = Math.sin(time * 1.2) * 0.06;
-        shield.rotation.y = Math.sin(time * 0.6) * 0.45;
-        shield.position.y = Math.sin(time * 1.2 + 1) * 0.06;
-        house.rotation.y = -0.35 + Math.sin(time * 0.7) * 0.25;
-        house.position.y = Math.sin(time * 1.2 + 2) * 0.06;
-
-        let held = 0;
-        coins.forEach((coin) => {
-            const t = ((time / cycle) + coin.userData.offset) % 1;
-            // 0-0.4: client -> escrow, 0.4-0.6: held in escrow, 0.6-1: escrow -> maid.
-            if (t < 0.4) {
-                coin.position.copy(curveA.getPoint(easeInOut(t / 0.4)));
-                coin.scale.setScalar(1);
-            } else if (t < 0.6) {
-                held = Math.max(held, Math.sin(((t - 0.4) / 0.2) * Math.PI));
-                coin.position.set(0, 0.15 + Math.sin(time * 4) * 0.03, 0.42);
-                coin.scale.setScalar(Math.max(0.001, 1 - Math.sin(((t - 0.4) / 0.2) * Math.PI)));
-            } else {
-                coin.position.copy(curveB.getPoint(easeInOut((t - 0.6) / 0.4)));
-                coin.scale.setScalar(t > 0.95 ? (1 - t) / 0.05 : 1);
-            }
-            coin.rotation.y += dt * 5;
-        });
-
-        // The shield glows while it holds the money.
-        glow.intensity = 3 + held * 9;
-        shield.scale.setScalar(1 + held * 0.06);
-
-        stage.renderer.render(scene, camera);
-        host.classList.add('is-3d');
-    };
-
-    stage.start();
-}
-
-function easeInOut(t) {
-    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }

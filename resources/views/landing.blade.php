@@ -75,9 +75,9 @@
                     <div class="escrow3d" data-three-escrow aria-hidden="true">
                         <div class="escrow3d__stage" data-escrow-stage></div>
                         <div class="escrow3d__labels">
-                            <span>Client pays</span>
-                            <span>{{ $site->get('site_name') }} holds it</span>
-                            <span>Maid gets paid</span>
+                            <span data-escrow-label><b>01</b> Client pays</span>
+                            <span data-escrow-label><b>02</b> {{ $site->get('site_name') }} holds it</span>
+                            <span data-escrow-label><b>03</b> Maid gets paid</span>
                         </div>
                     </div>
                     <div class="grid grid-3">
@@ -137,8 +137,19 @@
                 </div>
                 <div class="gallery3d" data-three-gallery tabindex="0" aria-label="Image gallery, use the left and right arrow keys to rotate">
                     <div class="gallery3d__stage" data-gallery-stage></div>
-                    <p class="gallery3d__caption" data-gallery-caption aria-live="polite"></p>
-                    <p class="gallery3d__hint" aria-hidden="true">Drag or swipe to spin</p>
+                    <div class="gallery3d__bar">
+                        <button type="button" class="gallery3d__arrow" data-gallery-prev aria-label="Previous image">
+                            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                        <div class="gallery3d__meta">
+                            <span class="gallery3d__counter" data-gallery-counter></span>
+                            <p class="gallery3d__caption" data-gallery-caption aria-live="polite"></p>
+                            <span class="gallery3d__progress" aria-hidden="true"><i data-gallery-progress></i></span>
+                        </div>
+                        <button type="button" class="gallery3d__arrow" data-gallery-next aria-label="Next image">
+                            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                    </div>
                     <ul class="gallery3d__grid">
                         @foreach ($gallery as $item)
                             <li data-gallery-item data-src="{{ $item['src'] }}" data-title="{{ $item['title'] }}">
