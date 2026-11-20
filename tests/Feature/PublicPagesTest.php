@@ -38,3 +38,15 @@ test('visitors can send a contact message', function () {
 
     expect(ContactMessage::query()->where('email', 'amina@example.com')->exists())->toBeTrue();
 });
+
+test('public pages carry the 3D scene hooks and keep the plain images as a fallback', function () {
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('data-three-hero', false)
+        ->assertSee('data-three-escrow', false)
+        ->assertSee('data-three-gallery', false)
+        ->assertSee('data-gallery-item', false)
+        ->assertSee('js/three-scenes.js', false);
+
+    $this->get('/about')->assertOk()->assertSee('data-three-hero', false);
+});
